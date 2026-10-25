@@ -180,6 +180,7 @@ def bake(source, data_dir):
     feeds.append(("JR-Kyushu", source.jr_kyushu_feed()))
     feeds.append(("JR-East", source.jr_east_dokotrain_feed()))
     feeds.append(("Nankai", source.nankai_feed()))
+    feeds.append(("JR-Central", source.jr_central_feed()))
     for op, payload in feeds:
         if not payload or not payload.get("ok"):
             op_stats[op] = {"feed": "unavailable"}
@@ -224,9 +225,13 @@ def bake(source, data_dir):
             else:
                 railways_hint = t.get("_railways")
                 if not railways_hint and t.get("_line_ja"):
-                    # line-name-only sources (doko-train): resolve the line
-                    # title to dokorail railways for timetable legs
-                    railways_hint = titles.get(t["_line_ja"])
+                    # line-name-only sources (doko-train, JR-Central): resolve
+                    # the title to dokorail railways, scoped to the operator -
+                    # 東海道本線 exists at three JRs, numbers can collide
+                    railways_hint = [
+                        r for r in titles.get(t["_line_ja"], [])
+                        if r.startswith(op + ".")
+                    ]
                 for rid in railways_hint or []:
                     store.railway_legs(rid)
                 leg = store.find_leg(

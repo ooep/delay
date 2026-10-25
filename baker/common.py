@@ -185,6 +185,13 @@ class Source:
 
         return nankai.fetch(self)
 
+    def jr_central_feed(self):
+        """JR-Central zairaisen JSON (baker/jrcentral.py). Offline mode
+        replays the captured zaisenichi fixture."""
+        from . import jrcentral
+
+        return jrcentral.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))
