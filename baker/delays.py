@@ -379,9 +379,15 @@ def bake(source, data_dir):
                     # 東海道本線 exists at three JRs, numbers can collide.
                     # Composite names (白新線・羽越本線) match each part.
                     raw_title = t["_line_ja"]
+                    # Kintetsu short names (奈良線) vs dokorail full titles
+                    # (近畿日本鉄道奈良線): try the short form, its 名-grown
+                    # variant and composites (白新線・羽越本線)
+                    candidates = [raw_title, "近畿日本鉄道" + raw_title]
                     parts = [raw_title] + raw_title.split("・")
-                    railways_hint = []
                     for part in parts:
+                        candidates += [part, "近畿日本鉄道" + part]
+                    railways_hint = []
+                    for part in candidates:
                         railways_hint += [
                             r for r in titles.get(part, [])
                             if r.startswith(op + ".") and r not in railways_hint

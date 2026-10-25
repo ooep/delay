@@ -164,9 +164,13 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
   - **大阪メトロ** — API 可用（公开 app key 见 Train Monitor gist）：
     `api.mobility-operation-info.emetro-app.osakametro.co.jp/app/api/v1/
     trainlocation?route_code=N`。深夜返回空列表；delay 分钟字段未确认。
-  - **近鉄** — navitime 端点仅线级延误；per-train 数据内嵌在
-    `tid.kintetsu.co.jp/LocationHtml/trainlocationinfoNN.html` 的 data-*
-    属性里（每线区一个 HTML，需 HTML 解析器）。
+  - **近鉄** — ✅ 已接入（`baker/kintetsu.py`，早高峰 31 班/29 映射实证）：
+    PC 版 `LocationWeb/trainlocationinfowebNN.html`（20 线区页）服务端渲染
+    ——站格 `data-stationcode`（1基序号→有序站名表）+ `.train-info-up/down`
+    （行先 + `.delay-time` **秒**）+ h2 行名（【A】奈良線）。**无车号**，
+    位置-时刻引擎（anchor+方向图标 up/down+行先）解析；短线名经 suki
+    别名表映射（奈良線→近鉄奈良線）。SP 版 trainparts 是另一套 DOM，
+    未用。
   - **JR-Central 新干线** — 浏览器实测端点已确认：位置页 ti08 每 2.5s 轮询
     `/shinkansen/var/train_info/train_location_info.json?timestamp=<epoch-ms>`
     （常量 `common/data/common_ja.json`、页面标签 `ti08f_ja.json`）。该

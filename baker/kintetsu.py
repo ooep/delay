@@ -90,7 +90,7 @@ def fetch(src=None):
     src = src or common.Source()
     if src.offline:
         pages = []
-        for f in sorted(src.offline_root.glob("kt-w*.html")):
+        for f in sorted(src.offline.root.glob("kt-w*.html")):
             pages.append(f.read_text(encoding="utf-8", errors="ignore"))
     else:
         try:
