@@ -124,6 +124,18 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
   走数字前缀匹配；八代等区段跨线重复记录按车号去重。
   ⚠️ 该站有 Akamai WAF：**必须串行+限速+带 Referer**，并发扫描会触发
   全站封禁（GitHub Actions 每次跑批 IP 全新，无此顾虑）。
+- **Nankai（南海電鉄）走独立源**：`baker/nankai.py` 直连南海 app 的公开 JSON
+  （`external-data.nankaiapp.com/tid/trains.json` + `/line/lines.json`，无 key）。
+  `delay`(分)/`train_number`/`line_id`/`station_id` 全有；line_id 1=南海線
+  (本線+空港線)→Nankai.Main+Airport、2=高野線→Koya。**注意 LegStore 的日历
+  候选修复**：dokorail bundle 的日历命名不统一（JR 系=Weekday/SaturdayHoliday/
+  Dated，南海=Weekday/Saturday/Holiday），`calendar_candidates()` 按星期智能
+  排序候选并回退，修掉了"周末永远匹配不到南海时刻表"的隐性 bug。
+  局限：dokorail 的南海时刻表是 service-build 自建、覆盖不全（如周日深夜的
+  6920 不在其中），这类班次上板但不进 by_suki_key。
+- 私铁侦察备忘：**阪急** v1 API 返回 HTML 壳（需 webview token 流程，缓）；
+  **近鉄** navitime 端点只有线级延误（per-train 需爬 LocationHtml，缓）；
+  **大阪メトロ** API 可用但样本无 delay 分钟字段（空车时段无法确认，缓）。
 - 晚点语义：`odpt:delay` 秒、按分钟量化、JR-West 封顶 3660s（显示 +61），
   字段缺失 = 未知（当准点显示），阈值 ≥60s。
 - baker 的 commit 会保住仓库活跃度，scheduled workflow 不会被 60 天规则停用。

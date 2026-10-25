@@ -178,6 +178,13 @@ class Source:
 
         return jreast_dokotrain.fetch(self)
 
+    def nankai_feed(self):
+        """Nankai app position JSON (baker/nankai.py). Offline mode replays
+        the captured trains/lines fixtures."""
+        from . import nankai
+
+        return nankai.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))

@@ -58,8 +58,7 @@ class LegStore:
         legs = []
         if entry and line and entry.get("bundle"):
             names = line["stations"]
-            dow = "Weekday" if self.weekday < 5 else "SaturdayHoliday"
-            for cal in (dow, "Dated"):
+            for cal in self.calendar_candidates(entry, self.weekday):
                 asset = entry["bundle"]["calendars"].get(cal)
                 if not asset:
                     continue
@@ -82,8 +81,29 @@ class LegStore:
                             "calendar": cal,
                         }
                         legs.append(leg)
+                if legs:
+                    break  # first calendar that actually has this railway's trains
         self.by_railway[railway] = legs
         return legs
+
+    @staticmethod
+    def calendar_candidates(entry, weekday):
+        """Calendar-name candidates for the date, in preference order.
+        dokorail bundles are inconsistent: JR lines use Weekday/
+        SaturdayHoliday/Dated, Nankai uses Weekday/Saturday/Holiday - so
+        beyond the day-appropriate name, fall back to whatever exists."""
+        avail = list((entry.get("bundle") or {}).get("calendars") or {})
+        primary = "Weekday" if weekday < 5 else (
+            "SaturdayHoliday" if weekday == 5 else "SaturdayHoliday"
+        )
+        if weekday == 6:  # Sunday: Holiday dialect before Saturday
+            order = [primary, "Holiday", "Saturday"]
+        elif weekday == 5:
+            order = [primary, "Saturday", "Holiday"]
+        else:
+            order = [primary]
+        order += ["Dated"]
+        return [c for c in dict.fromkeys(order + avail) if c in avail]
 
     def find_leg(self, railway, number, op=None, railways=None, number_prefix=None):
         """Best leg for a feed train, operator-scoped. `railways` lists the
@@ -159,6 +179,7 @@ def bake(source, data_dir):
     feeds.append(("JR-Hokkaido", source.jr_hokkaido_feed()))
     feeds.append(("JR-Kyushu", source.jr_kyushu_feed()))
     feeds.append(("JR-East", source.jr_east_dokotrain_feed()))
+    feeds.append(("Nankai", source.nankai_feed()))
     for op, payload in feeds:
         if not payload or not payload.get("ok"):
             op_stats[op] = {"feed": "unavailable"}
