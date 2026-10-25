@@ -147,6 +147,7 @@ def bake(source, data_dir):
     for op, payload in feeds:
         if not payload or not payload.get("ok"):
             op_stats[op] = {"feed": "unavailable"}
+            print(f"feed unavailable: {op}")
             continue
         body = payload.get("body") or []
         delayed = 0

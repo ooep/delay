@@ -133,7 +133,8 @@ class Source:
             feeds = get_json(
                 DOKORAIL + "/api/feeds?" + qs, headers=dict(TRAIN_SEARCH_HEADER)
             )
-        except Exception:
+        except Exception as exc:
+            print(f"feed {operator}: {type(exc).__name__}: {str(exc)[:160]}")
             return None
         return feeds.get("operators", {}).get(operator)
 
