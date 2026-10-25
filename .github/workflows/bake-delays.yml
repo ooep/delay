@@ -1,13 +1,13 @@
 name: bake-delays
 
 # The whole pipeline in one workflow:
-#   - every run (*/10): dokorail live feeds -> data/delays.json
+#   - every run: dokorail live feeds (+ JR own-source feeds) -> data/delays.json
 #     (only the timetable bundles of lines with delayed trains are fetched)
 #   - Sundays / when missing: refresh the slow-moving caches - dokorail
 #     geometry catalog (data/lines.json) and jr.suki.ing's tmaps.json +
 #     lines_map.json snapshots (data/suki/)
 #
-# jr.suki.ing reads data/delays.json via Pages/jsDelivr. Its by_suki_key
+# jr.suki.ing reads data/delays.json via Pages / jsDelivr. Its by_suki_key
 # table tags the site's own trains with zero join logic. Board carries
 # generated_at so the UI can show its age; GitHub cron jitters, so treat
 # this as a refreshed snapshot, not a realtime stream.
@@ -40,26 +40,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Refresh weekly caches (Sunday or first run)
-        run: |
-          need=0
-          [ -f data/lines.json ] || need=1
-          [ -f data/suki/tmaps.json ] || need=1
-          [ "$(date -u +%u)" = 7 ] && need=1
-          if [ "$need" = 1 ]; then
-            python -m baker.lines --data-dir data
-            python - <<'EOF'
-            from pathlib import Path
-            from baker import common
-            src = common.Source()
-            out = Path("data/suki"); out.mkdir(parents=True, exist_ok=True)
-            (out / "tmaps.json").write_bytes(common.http_get(common.SUKI_STATIC + "/tmaps.json"))
-            (out / "lines_map.json").write_bytes(common.http_get(common.SUKI_STATIC + "/lines_map.json"))
-            print("suki cache refreshed")
-            EOF
-          else
-            echo "caches fresh enough, skipping"
-          fi
+      - name: Refresh caches (weekly or when missing)
+        run: python -m baker.refresh --data-dir data
 
       - name: Bake delay board
         run: python -m baker.delays --data-dir data

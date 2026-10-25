@@ -62,7 +62,7 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
 ## 文件
 
 - `baker/common.py` — dokorail 抓取 + v3 bundle 解码（站序/时刻/dated 位掩码）
-- `baker/lines.py` — 每周烘焙 `data/lines.json`（线路桥 + 实时运营商表）
+- `baker/refresh.py` — 每周刷新慢变缓存：`data/lines.json`（线路桥 + 实时运营商表）和 suki 侧 `tmaps.json`/`lines_map.json` 快照
 - `baker/suki.py` — tmaps 匹配器
 - `baker/delays.py` — 主流程：feeds → 当日相关 bundle → 语义匹配 → delays.json
 - `web/delay-tag.js` — 站点接入（`loadDelays().for(key, {depMin})`）
