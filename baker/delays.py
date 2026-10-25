@@ -261,7 +261,9 @@ class LegStore:
                 ordered = len(seq) >= 2 and self._is_ordered_subseq(seq, stop_names)
                 if len(seq) >= 2 and not ordered:
                     continue  # wrong direction: its stops run the other way
-                directed = ordered or (dest is not None and dest in stop_names)
+                # destination must be the leg's terminus (mere membership is
+                # symmetric - the opposite leg contains it as its origin)
+                directed = ordered or (dest is not None and stop_names and dest == stop_names[-1])
                 for idx, name in enumerate(stop_names):
                     if name != target:
                         continue

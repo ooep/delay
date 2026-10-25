@@ -153,12 +153,14 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
   四家全自动经 api.odpt.org 进板。odpt:Train 对象与 dokorail 透传格式一致
   （odpt:railway/odpt:trainNumber/odpt:delay），走标准 catalog→腿→suki 流程。
 - 私铁侦察备忘（2026-10-26 夜间侦察）：
-  - **阪神** — schema 已完整捕获：`apl.hanshin.co.jp/5/data/ikisaki_<行先>.json`
-    （`forinf[].trninf[]`: no/typ/pos/stp/**dly**/dlyflg 槽位制）+ masters
-    (`/5/json/{line,station,direction,syasyu}.json`)。卡点：公开页**不发列车
-    番号**（no 为内部序列），suki 站序映射需要新的"位置-时刻匹配引擎"
-    （把 dokorail 腿按 now-delay 插值到所报车站），或仅上板。深夜全空，
-    需白天验证填充态。
+  - **阪神** — ✅ 已接入（`baker/hanshin.py`，早高峰实弹验证）：28 个
+    `data/ikisaki_NNN.json` 显示盘文件（019 缺），去重键
+    (bnd,typ,stp,tim,dly)——早高峰 189 槽→131 唯一车。**不发车号**：`stp`
+    后续停站文本解析为有序站序列，驱动位置-时刻引擎（anchor=首站 +
+    有序子序列定向 + 终点校验），直通特急(山陽姫路行)实证匹配
+    大阪梅田→元町 gap 0.5min；`bnd`=目的站码（含山陽直通）；"各駅に停車
+    します"类无站名文本→仅上板。**山陽直通车已确认在本 feed 内**
+    （bnd=山陽姫路），阪神接入同时覆盖山陽侧。
   - **大阪メトロ** — API 可用（公开 app key 见 Train Monitor gist）：
     `api.mobility-operation-info.emetro-app.osakametro.co.jp/app/api/v1/
     trainlocation?route_code=N`。深夜返回空列表；delay 分钟字段未确认。
