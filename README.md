@@ -146,6 +146,13 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
   - **近鉄** — navitime 端点仅线级延误；per-train 数据内嵌在
     `tid.kintetsu.co.jp/LocationHtml/trainlocationinfoNN.html` 的 data-*
     属性里（每线区一个 HTML，需 HTML 解析器）。
+  - **JR-Central 新干线** — 浏览器实测端点已确认：位置页 ti08 每 2.5s 轮询
+    `/shinkansen/var/train_info/train_location_info.json?timestamp=<epoch-ms>`
+    （常量 `common/data/common_ja.json`、页面标签 `ti08f_ja.json`）。该
+    `var/` 文件只在运营时段存在（01:45 收车后被撤下并 302，页面跳 ti99
+    占位页），深夜取不到样本。待白天抓一次响应体确认字段——特别是有无
+    per-train 晚点分钟（新干线对外多为线级「約○分の遅れ」，若无则按线级
+    公告接入）。
   - **名鉄/京成/東急/西武/京王/相鉄** — 入口页已定位，数据层未追踪
     （深夜站点慢/404/SPA，需白天逐个浏览器抓包）。
 - 晚点语义：`odpt:delay` 秒、按分钟量化、JR-West 封顶 3660s（显示 +61），
