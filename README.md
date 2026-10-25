@@ -133,9 +133,21 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
   排序候选并回退，修掉了"周末永远匹配不到南海时刻表"的隐性 bug。
   局限：dokorail 的南海时刻表是 service-build 自建、覆盖不全（如周日深夜的
   6920 不在其中），这类班次上板但不进 by_suki_key。
-- 私铁侦察备忘：**阪急** v1 API 返回 HTML 壳（需 webview token 流程，缓）；
-  **近鉄** navitime 端点只有线级延误（per-train 需爬 LocationHtml，缓）；
-  **大阪メトロ** API 可用但样本无 delay 分钟字段（空车时段无法确认，缓）。
+- 私铁侦察备忘（2026-10-26 夜间侦察）：
+  - **阪神** — schema 已完整捕获：`apl.hanshin.co.jp/5/data/ikisaki_<行先>.json`
+    （`forinf[].trninf[]`: no/typ/pos/stp/**dly**/dlyflg 槽位制）+ masters
+    (`/5/json/{line,station,direction,syasyu}.json`)。卡点：公开页**不发列车
+    番号**（no 为内部序列），suki 站序映射需要新的"位置-时刻匹配引擎"
+    （把 dokorail 腿按 now-delay 插值到所报车站），或仅上板。深夜全空，
+    需白天验证填充态。
+  - **大阪メトロ** — API 可用（公开 app key 见 Train Monitor gist）：
+    `api.mobility-operation-info.emetro-app.osakametro.co.jp/app/api/v1/
+    trainlocation?route_code=N`。深夜返回空列表；delay 分钟字段未确认。
+  - **近鉄** — navitime 端点仅线级延误；per-train 数据内嵌在
+    `tid.kintetsu.co.jp/LocationHtml/trainlocationinfoNN.html` 的 data-*
+    属性里（每线区一个 HTML，需 HTML 解析器）。
+  - **名鉄/京成/東急/西武/京王/相鉄** — 入口页已定位，数据层未追踪
+    （深夜站点慢/404/SPA，需白天逐个浏览器抓包）。
 - 晚点语义：`odpt:delay` 秒、按分钟量化、JR-West 封顶 3660s（显示 +61），
   字段缺失 = 未知（当准点显示），阈值 ≥60s。
 - baker 的 commit 会保住仓库活跃度，scheduled workflow 不会被 60 天规则停用。
