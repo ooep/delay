@@ -191,6 +191,18 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
     注册 token；Qiita 有解析文章 mima_ita/ac8efe441b6c7f2165e2）。拿到
     token 后在 odpt.py 里加 TokyoMetro 即可（ODPT 标准格式）。
   - **西鉄**（suki 太宰府線 4）— 官网 train/location/ 404，数据在 app 里；
+  - **第二批侦察（2026-10-26 深夜，源自 174.diary.to 走行位置まとめ）**：
+    - **青い森鉄道**（suki 28 班）— `aoimoriunkou.xsrv.jp`，服务端渲染的单页
+      HTML/SVG（inline 变量含 delay_be/delay_af），HTML 解析器即可，全线公开；
+    - **近鉄 PC 版**（suki 近鉄名古屋線 91）— `tid.kintetsu.co.jp/LocationWeb/
+      index.html`，**服务端渲染**（车次 1860/1830/1777… 内嵌，结构同名鉄），
+      HTML 解析器方案——比 navitime 的线级端点更进一步，能拿到 per-train；
+    - **あいの風とやま鉄道（あいトレ）**（suki 31 班）— Angular SPA
+      （trafficinfo.ainokaze.co.jp），需从 main.bundle.js 里挖 API；
+    - **西鉄**（天神大牟田線走行位置）— 真身是 `busnavi-railway.nnr.co.jp/
+      tenjin_omuta/`（NNR 系统，84KB 页），深夜处于「大幅遅延で表示不可」
+      错误态，API 需从 common/js/script.js 顺藤摸瓜；
+    - **北越急行** — HTML+画像（位置画成图片，数据不可机器读取，放弃）。
     神戸市営/名古屋市営/札幌市営地下鉄官网主机深夜全部连接失败（地区限制
     或反爬），需白天验证。
 - 晚点语义：`odpt:delay` 秒、按分钟量化、JR-West 封顶 3660s（显示 +61），
