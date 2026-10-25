@@ -199,6 +199,13 @@ class Source:
 
         return keihan.fetch(self)
 
+    def hanshin_feed(self):
+        """Hanshin slot-board displays (baker/hanshin.py). Offline mode
+        replays the captured ikisaki fixtures + masters."""
+        from . import hanshin
+
+        return hanshin.fetch(self)
+
     def jr_west_guide_feed(self):
         """JR-West official train-guide JSON (baker/jrwest_guide.py).
         Offline mode replays the captured area/position/station fixtures."""

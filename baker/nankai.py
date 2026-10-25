@@ -79,6 +79,7 @@ def fetch(src=None):
                 "_line_ja": line_name,
                 "_suki_line": line_name,
                 "_station": station_names.get(t.get("station_id")),
+            "_dest": station_names.get(t.get("destination_station_id")),
                 "_direction": t.get("direction"),
             }
         )

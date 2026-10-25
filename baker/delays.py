@@ -232,34 +232,59 @@ class LegStore:
 
         return sorted(legs, key=window)[0]
 
-    def find_leg_by_position(self, railways, station, delay_min, tolerance=20):
+    def find_leg_by_position(self, railways, station, delay_min, tolerance=20, dest_hint=None, upcoming=None):
         """ID-less matching: the feed reports "at <station>, N min late" -
         return the leg whose timetable has it stopping at that station
         around (now - N). Stops AND times both participate (停站和时间基本
         吻合); ties resolve to the nearest scheduled passage. For number-less
         feeds (Hanshin-style slot boards) and as fallback when a feed number
-        has no dokorail leg (e.g. Nankai extras). Returns (leg, gap_min)."""
+        has no dokorail leg (e.g. Nankai extras). Returns (leg, gap_min).
+
+        Direction disambiguation (both directions stop at the anchor at
+        similar times): `upcoming` (ordered next stops from the feed) must
+        appear in order in the leg - works across through-service splits,
+        where no single leg contains both anchor and final destination.
+        dest_hint then prefers legs that actually contain the destination."""
         if not station:
             return None, None
         target = norm_station_key(station)
         if not target:
             return None, None
+        dest = norm_station_key(dest_hint or "") or None
+        seq = [norm_station_key(s) for s in (upcoming or []) if s]
         pass_time = self.now_min - delay_min
         best, best_gap = None, None
+        best_dir, best_dir_gap = None, None
         for rid in railways or []:
             for leg in self.railway_legs(rid):
-                for s in leg["stops"]:
-                    if norm_station_key(s["station"]) != target:
+                stop_names = [norm_station_key(s["station"]) for s in leg["stops"]]
+                ordered = len(seq) >= 2 and self._is_ordered_subseq(seq, stop_names)
+                if len(seq) >= 2 and not ordered:
+                    continue  # wrong direction: its stops run the other way
+                directed = ordered or (dest is not None and dest in stop_names)
+                for idx, name in enumerate(stop_names):
+                    if name != target:
                         continue
+                    s = leg["stops"][idx]
                     arr = hhmm_to_min(s.get("arr") or s["dep"])
                     dep = hhmm_to_min(s["dep"])
                     gap = abs((arr + dep) / 2 - pass_time)
+                    if directed:
+                        if best_dir_gap is None or gap < best_dir_gap:
+                            best_dir, best_dir_gap = leg, gap
                     if best_gap is None or gap < best_gap:
                         best, best_gap = leg, gap
                     break  # first occurrence of the station on this leg
+        if best_dir is not None and best_dir_gap <= tolerance:
+            return best_dir, round(best_dir_gap, 1)
         if best is not None and best_gap <= tolerance:
             return best, round(best_gap, 1)
         return None, None
+
+    @staticmethod
+    def _is_ordered_subseq(needle, hay):
+        it = iter(hay)
+        return all(any(s == h for h in it) for s in needle)
 
 
 def bake(source, data_dir):
@@ -293,6 +318,7 @@ def bake(source, data_dir):
     feeds.append(("Nankai", source.nankai_feed()))
     feeds.append(("JR-Central", source.jr_central_feed()))
     feeds.append(("Keihan", source.keihan_feed()))
+    feeds.append(("Hanshin", source.hanshin_feed()))
     feeds.append(("JR-West", source.jr_west_guide_feed()))
     # ODPT operators (Toei keyless; Tobu/YokohamaMunicipal keyed). Keikyu has
     # its own keyless web API (baker/keikyu.py)
@@ -332,6 +358,8 @@ def bake(source, data_dir):
             }
             if t.get("_station"):
                 entry["from"] = t["_station"]
+            if t.get("_dest"):
+                entry["to"] = t["_dest"]
             if t.get("_or_more"):
                 # JR-Kyushu "+N分以上": the value is a floor, not exact
                 entry["delay_or_more"] = True
@@ -371,7 +399,11 @@ def bake(source, data_dir):
                     # position-time fallback: the train reports where it is
                     # and how late - find the timetable leg that fits
                     leg, pos_gap = store.find_leg_by_position(
-                        railways_hint, t["_station"], round(delay / 60)
+                        railways_hint,
+                        t["_station"],
+                        round(delay / 60),
+                        dest_hint=t.get("_dest"),
+                        upcoming=t.get("_upcoming"),
                     )
                     match_method = "position" if leg else None
                 if leg:
@@ -389,6 +421,13 @@ def bake(source, data_dir):
                     }
             if stations:
                 cands = suki_index.match(stations, suki_line, railway=railway)
+                if not cands and suki_line and "・" in suki_line:
+                    # composite dokotrain groups (中央本線・篠ノ井線): suki tags
+                    # trains with the individual line names - retry per part
+                    for part in suki_line.split("・"):
+                        cands = suki_index.match(stations, part, railway=railway)
+                        if cands:
+                            break
                 if cands:
                     entry["suki"] = cands
             board.append(entry)
