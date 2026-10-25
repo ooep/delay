@@ -19,7 +19,8 @@ def needed(data_dir, force):
     root = Path(data_dir)
     if force:
         return True
-    for name in ("lines.json", "suki/tmaps.json", "suki/lines_map.json"):
+    for name in ("lines.json", "suki/tmaps.json", "suki/lines_map.json",
+                 "suki/trains_wd.json", "suki/trains_sa.json", "suki/trains_su.json"):
         if not (root / name).exists():
             return True
     return common.jst_now().weekday() == WEEKDAY_SUNDAY
@@ -57,6 +58,12 @@ def refresh(source, data_dir):
     suki.mkdir(parents=True, exist_ok=True)
     (suki / "tmaps.json").write_bytes(common.http_get(common.SUKI_STATIC + "/tmaps.json"))
     (suki / "lines_map.json").write_bytes(common.http_get(common.SUKI_STATIC + "/lines_map.json"))
+    # full timetables with times (trains_wd/su/sa.json, ~12 MB each) - staged
+    # for time-based one-to-one resolution against delayed trains
+    for name in ("trains_wd", "trains_sa", "trains_su"):
+        (suki / f"{name}.json").write_bytes(
+            common.http_get(common.SUKI_STATIC + f"/data/{name}.json")
+        )
     return slim
 
 

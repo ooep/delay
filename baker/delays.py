@@ -319,12 +319,26 @@ def main():
     out = Path(args.data_dir) / "delays.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+    # sukijr.json: the strictly-one-to-one simplification the site asked for
+    # - {tmaps_key: delay_minutes}, unambiguous strong matches only.
+    # Ambiguous keys (same stopping pattern, several delayed services) stay
+    # in delays.json's by_suki_key with alternatives for time tie-breaking.
+    sukijr = {
+        k: v["delay_min"]
+        for k, v in payload["by_suki_key"].items()
+        if not v["ambiguous"]
+    }
+    (Path(args.data_dir) / "sukijr.json").write_text(
+        json.dumps(sukijr, ensure_ascii=False, separators=(",", ":"))
+    )
     with_legs = sum(1 for t in payload["trains"] if t.get("scheduled"))
     with_suki = sum(1 for t in payload["trains"] if t.get("suki"))
     print(
         f"delays: {payload['delayed_count']} delayed, "
         f"{with_legs} with dokorail leg, {with_suki} mapped to suki keys "
-        f"({payload['matched_suki_count']} unique keys) -> {out}"
+        f"({payload['matched_suki_count']} unique keys, "
+        f"{len(sukijr)} one-to-one) -> {out}"
     )
 
 
