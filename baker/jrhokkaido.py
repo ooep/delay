@@ -72,24 +72,26 @@ def _offline_json(src, name):
 
 
 def _fetch_raw(src):
-    """Returns (raw_trains, daiya_by_senku, eki_names) with raw_trains a
-    list of {cbango, chien_min, senku} for trains in transit, or None."""
-    if src.offline:
-        trains = []
-        for i in range(1, 20):
-            d = _offline_json(src, f"jrh-loc-{i:02d}.json")
-            if not d:
-                continue
-            for t in d.get("trains", []):
-                trains.append(t)
-        return trains
+    """Returns (raw_trains, source_time) with raw_trains a list of train
+    dicts in transit, source_time the provider's own display timestamp, or
+    (None, None) when nothing was reachable."""
     trains = []
-    for i in range(1, 20):
-        d = _get_json_bom(src, LOCATION_URL.format(i))
+    times = []
+    if src.offline:
+        files = [
+            (_offline_json(src, f"jrh-loc-{i:02d}.json")) for i in range(1, 20)
+        ]
+    else:
+        files = [_get_json_bom(src, LOCATION_URL.format(i)) for i in range(1, 20)]
+    for d in files:
         if not d or not isinstance(d.get("trains"), list):
             continue
         trains.extend(d["trains"])
-    return trains
+        if d.get("time"):
+            times.append(d["time"])
+    if not trains and not times:
+        return None, None
+    return trains, (max(times) if times else None)
 
 
 def parse_raw(raw, src):
@@ -182,7 +184,10 @@ def parse_raw(raw, src):
 def fetch(src=None):
     """Feed-shaped payload, or None when the service is unreachable."""
     src = src or common.Source()
-    raw = _fetch_raw(src)
+    raw, source_time = _fetch_raw(src)
     if not raw:
         return None
-    return parse_raw(raw, src)
+    payload = parse_raw(raw, src)
+    if payload is not None:
+        payload.setdefault("source_time", source_time)
+    return payload

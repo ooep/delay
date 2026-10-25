@@ -54,8 +54,9 @@ def fetch(src=None):
         if isinstance(v, dict) and v.get("MAX_DELAY_MINUTES", 0) >= DELAY_THRESHOLD_MIN
     }
     now = common.jst_now()
+    source_time = status.get("announced_date")
     if not delayed:
-        return {"ok": True, "fetchedAt": now.isoformat(), "body": []}
+        return {"ok": True, "fetchedAt": now.isoformat(), "source_time": source_time, "body": []}
 
     master = _j(src, LINE_MASTER_URL, "dt-dokotrain_line_master.json")
     line_names = {
@@ -70,10 +71,13 @@ def fetch(src=None):
             stations[code] = row.get("STATION_NAME_KANJI")
 
     body = []
+    pos_stamps = []
     for lid in delayed:
         pos = _j(src, POS_URL.format(lid), f"dt-{lid}.json")
         if not pos:
             continue
+        if pos.get("announced_date"):
+            pos_stamps.append(pos["announced_date"])
         line_name = common.PAREN_RE.sub("", line_names.get(lid, "")).strip() or f"dokotrain:{lid}"
         for key, t in ((pos.get("LINE_STATUS") or {}).get("TRAIN_STATUS") or {}).items():
             if not isinstance(t, dict):
@@ -96,9 +100,11 @@ def fetch(src=None):
                     "_dokotrain_line": lid,
                 }
             )
+    stamps = [source_time] + pos_stamps
     return {
         "ok": True,
         "fetchedAt": now.isoformat(),
+        "source_time": max((s for s in stamps if s), default=None) or None,
         "body": body,
         "source": "doko-train.jp",
     }

@@ -101,6 +101,10 @@ def parse_raw(routes_data, now=None):
     return {
         "ok": True,
         "fetchedAt": now.isoformat(),
+        "source_time": max(
+            (str(p.get("currentTimeStamp")) for _, _, p, *_ in routes_data if p.get("currentTimeStamp")),
+            default=None,
+        ) or None,
         "body": body,
         "source": "goto-mirai.jrkyushu.co.jp",
     }

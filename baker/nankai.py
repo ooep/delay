@@ -43,15 +43,16 @@ def _offline_json(src, name):
 def fetch(src=None):
     src = src or common.Source()
     if src.offline:
-        trains = (_offline_json(src, "nk-trains.json") or {}).get("trains") or []
+        raw = _offline_json(src, "nk-trains.json") or {}
         lines_master = (_offline_json(src, "nk-lines.json") or {}).get("lines") or []
     else:
         try:
-            trains = (common.get_json(TRAINS_URL) or {}).get("trains") or []
+            raw = common.get_json(TRAINS_URL) or {}
             lines_master = (common.get_json(LINES_URL) or {}).get("lines") or []
         except Exception as exc:
             print(f"nankai feed: {type(exc).__name__}: {str(exc)[:120]}")
             return None
+    trains = raw.get("trains") or []
     station_names = {}
     for line in lines_master:
         for st in line.get("stations") or []:
@@ -81,9 +82,14 @@ def fetch(src=None):
                 "_direction": t.get("direction"),
             }
         )
+    stamps = [
+        " ".join(filter(None, [raw.get(f"{k}_update_date"), raw.get(f"{k}_update_time")]))
+        for k in ("nankai", "koya")
+    ]
     return {
         "ok": True,
         "fetchedAt": common.jst_now().isoformat(),
+        "source_time": max((s for s in stamps if s), default=None) or None,
         "body": body,
         "source": "external-data.nankaiapp.com",
     }

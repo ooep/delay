@@ -214,6 +214,13 @@ class Source:
 
         return odpt.fetch(self, operator)
 
+    def keikyu_feed(self):
+        """Keikyu app-kq.net position JSON (baker/keikyu.py). Offline mode
+        replays the captured kq-train.json fixture."""
+        from . import keikyu
+
+        return keikyu.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))

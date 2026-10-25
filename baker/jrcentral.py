@@ -84,6 +84,7 @@ def fetch(src=None):
     return {
         "ok": True,
         "fetchedAt": common.jst_now().isoformat(),
+        "source_time": d.get("create_time"),
         "body": body,
         "source": "traininfo.jr-central.co.jp",
     }

@@ -36,6 +36,46 @@ def title_index(lines_catalog):
     return idx
 
 
+def _source_lag_minutes(fetched_iso, source_time):
+    """fetched_at - source_time in whole minutes, tolerating every provider
+    timestamp dialect seen so far. Naive stamps are read as JST; an explicit
+    GMT/Z suffix means UTC. Returns None when unparseable/missing."""
+    import re as _re
+    from datetime import datetime, timedelta, timezone
+
+    if not source_time:
+        return None
+    jst = timezone(timedelta(hours=9))
+    try:
+        f_dt = datetime.fromisoformat(fetched_iso)
+    except Exception:
+        return None
+    s_raw = str(source_time).strip()
+    s_dt = None
+    m = _re.match(r"^(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分", s_raw)
+    try:
+        if m:
+            y, mo, dd, hh, mi = map(int, m.groups())
+            s_dt = datetime(y, mo, dd, hh, mi, tzinfo=jst)
+        elif s_raw.endswith("GMT"):
+            s_dt = datetime.strptime(s_raw, "%Y/%m/%d %H:%M:%S GMT").replace(
+                tzinfo=timezone.utc
+            )
+        elif _re.match(r"^\d{14}$", s_raw):
+            s_dt = datetime.strptime(s_raw, "%Y%m%d%H%M%S").replace(tzinfo=jst)
+        elif "T" in s_raw:
+            s_dt = datetime.fromisoformat(s_raw.replace("Z", "+00:00"))
+            if s_dt.tzinfo is None:
+                s_dt = s_dt.replace(tzinfo=jst)
+        elif "/" in s_raw:
+            s_dt = datetime.strptime(s_raw, "%Y/%m/%d %H:%M:%S").replace(tzinfo=jst)
+    except Exception:
+        return None
+    if s_dt is None:
+        return None
+    return round((f_dt - s_dt).total_seconds() / 60)
+
+
 def norm_station_key(name):
     """Station names normalized for cross-dataset comparison: parenthetical
     disambiguators dropped (粉浜 stays 粉浜, 追分(北海道) -> 追分) and the
@@ -148,6 +188,8 @@ class LegStore:
         else:
             pools = []
         base = number_prefix or number or ""
+        if not base:
+            return None  # no number to match on; caller falls back to position matching
 
         def match_pool(pool):
             exact = [l for l in pool if l["number"] == base]
@@ -238,8 +280,10 @@ def bake(source, data_dir):
     feeds.append(("JR-Central", source.jr_central_feed()))
     feeds.append(("Keihan", source.keihan_feed()))
     feeds.append(("JR-West", source.jr_west_guide_feed()))
-    # ODPT operators (Toei keyless; Keikyu/Tobu/YokohamaMunicipal keyed)
-    for _odpt_op in ("Toei", "Keikyu", "Tobu", "YokohamaMunicipal"):
+    # ODPT operators (Toei keyless; Tobu/YokohamaMunicipal keyed). Keikyu has
+    # its own keyless web API (baker/keikyu.py)
+    feeds.append(("Keikyu", source.keikyu_feed()))
+    for _odpt_op in ("Toei", "Tobu", "YokohamaMunicipal"):
         feeds.append((_odpt_op, source.odpt_feed(_odpt_op)))
     for op, payload in feeds:
         if not payload or not payload.get("ok"):
@@ -328,7 +372,12 @@ def bake(source, data_dir):
                 if cands:
                     entry["suki"] = cands
             board.append(entry)
-        op_stats[op] = {"fetched_at": payload.get("fetchedAt"), "trains": len(body), "delayed": delayed}
+        op_stats[op] = {
+            "fetched_at": payload.get("fetchedAt"),
+            "source_time": payload.get("source_time"),
+            "trains": len(body),
+            "delayed": delayed,
+        }
 
     board.sort(key=lambda e: (-e["delay_s"], e["railway"], e["number"] or ""))
     by_key = {}
@@ -357,12 +406,26 @@ def bake(source, data_dir):
             if slot["train"] != e["number"]:
                 slot["ambiguous"] = True
                 slot["alternatives"].append({"train": e["number"], "line": e["line"], "delay_min": e["delay_min"]})
+    # freshness: for each source, how stale the provider's data was when we
+    # fetched it (fetched_at minus the provider's own latest timestamp).
+    freshness = {}
+    for op, st in op_stats.items():
+        fetched = st.get("fetched_at")
+        if not fetched:
+            continue
+        lag = _source_lag_minutes(fetched, st.get("source_time"))
+        freshness[op] = {
+            "fetched_at": fetched[:19],
+            "source_time": st.get("source_time"),
+            "lag_minutes": lag,
+        }
     return {
         "version": 1,
         "generated_at": now.isoformat(),
         "date": now.date().isoformat(),
         "delayed_count": len(board),
         "matched_suki_count": len(by_key),
+        "freshness": freshness,
         "operators": op_stats,
         "trains": board,
         "by_suki_key": by_key,
@@ -383,13 +446,22 @@ def main():
     # - {tmaps_key: delay_minutes}, unambiguous strong matches only.
     # Ambiguous keys (same stopping pattern, several delayed services) stay
     # in delays.json's by_suki_key with alternatives for time tie-breaking.
+    # Reserved header keys (version/generated_at/freshness) ride along so
+    # consumers can check data age; numeric tmaps keys never collide.
     sukijr = {
         k: v["delay_min"]
         for k, v in payload["by_suki_key"].items()
         if not v["ambiguous"]
     }
+    sukijr_out = {
+        "version": 1,
+        "generated_at": payload["generated_at"],
+        "date": payload["date"],
+        "freshness": payload.get("freshness", {}),
+        "delay_min": sukijr,
+    }
     (Path(args.data_dir) / "sukijr.json").write_text(
-        json.dumps(sukijr, ensure_ascii=False, separators=(",", ":"))
+        json.dumps(sukijr_out, ensure_ascii=False, separators=(",", ":"))
     )
     with_legs = sum(1 for t in payload["trains"] if t.get("scheduled"))
     with_suki = sum(1 for t in payload["trains"] if t.get("suki"))

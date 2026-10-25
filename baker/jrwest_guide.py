@@ -81,8 +81,11 @@ def fetch(src=None):
     body = []
     delayed_slugs = set()
     pending = []
+    stamps = []
     for slug in slug_names:
         d = _get(src, f"{slug}.json", f"wg-trains-{slug}.json")
+        if d and d.get("update"):
+            stamps.append(str(d["update"]))
         for t in (d or {}).get("trains") or []:
             if not isinstance(t, dict):
                 continue
@@ -134,6 +137,7 @@ def fetch(src=None):
     return {
         "ok": True,
         "fetchedAt": now.isoformat(),
+        "source_time": max(stamps) if stamps else None,
         "body": body,
         "source": "train-guide.westjr.co.jp",
     }
