@@ -105,6 +105,13 @@ def fetch(src=None):
             if info.get("code"):
                 station_names[info["code"]] = info.get("name")
 
+    def _dest_text(raw):
+        # dest is normally {text, code, line} but the live API sometimes
+        # emits a bare string; keep both shapes flowing
+        if isinstance(raw, dict):
+            return raw.get("text")
+        return raw if isinstance(raw, str) else None
+
     for slug, number, delay_min, t in pending:
         raw_name = slug_names.get(slug, slug)
         line_name = LINE_NAME_REWRITES.get(raw_name, raw_name)
@@ -121,7 +128,7 @@ def fetch(src=None):
                 "_line_ja": line_name,
                 "_suki_line": line_name,
                 "_station": station_names.get(at),
-                "_dest": (t.get("dest") or {}).get("text"),
+                "_dest": _dest_text(t.get("dest")),
             }
         )
     return {
