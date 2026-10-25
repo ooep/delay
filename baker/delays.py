@@ -480,6 +480,30 @@ def bake(source, data_dir):
                         upcoming=t.get("_upcoming"),
                     )
                     match_method = "position" if leg else None
+                if not leg and t.get("_station") and t.get("_line_ja"):
+                    # last resort - suki-direct: for lines whose dokorail
+                    # timetable is an empty shell (shinkansen bundles),
+                    # match straight against suki trains on the line that
+                    # contain the reported station; direction from the feed
+                    # number's parity (odd = 下り) checked against the
+                    # entry's terminal order, stop-count bucket from type
+                    hint_rails = railways_hint or [
+                        r for r in titles.get(t["_line_ja"], [])
+                        if r.startswith(op + ".")
+                    ]
+                    has_legs = any(store.railway_legs(r) for r in hint_rails)
+                    if not has_legs:
+                        num = str(t.get("odpt:trainNumber") or "")
+                        direction = None
+                        if num.isdigit():
+                            direction = "down" if int(num) % 2 else "up"
+                        direct = suki_index.match_direct(
+                            t["_line_ja"], t["_station"], direction,
+                            entry.get("type"),
+                        )
+                        if direct:
+                            entry["suki"] = direct
+                            entry["match"] = "suki-direct"
                 if leg:
                     stations = [s["station"] for s in leg["stops"]]
                     entry["railway"] = leg["railway"]
@@ -518,8 +542,12 @@ def bake(source, data_dir):
         for c in e.get("suki", []):
             # strong matches only for the flat lookup table: exact ordered
             # containment, or off by at most one stop (stopping-pattern drift
-            # between the datasets); looser candidates stay on the train
-            if not (c["subseq"] or c.get("fuzzy", 99) <= 1):
+            # between the datasets); suki-direct candidates are trusted only
+            # as a unique hit (no sequence evidence behind them)
+            if c.get("direct"):
+                if len(e.get("suki") or []) != 1 or e.get("match") != "suki-direct":
+                    continue
+            elif not (c["subseq"] or c.get("fuzzy", 99) <= 1):
                 continue
             slot = by_key.setdefault(
                 c["key"],

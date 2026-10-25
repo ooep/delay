@@ -173,6 +173,53 @@ class SukiIndex:
             prev = cur
         return prev[-1]
 
+    # north-end terminals per shinkansen line: an entry whose first stop is
+    # the north terminal runs 下り (odd numbers), matching JR numbering parity
+    NORTH_TERMINALS = {
+        "東海道新幹線": {"東京"},
+        "山陽新幹線": {"新大阪"},
+        "九州新幹線": {"博多"},
+    }
+
+    # stopping-pattern size buckets by service type (approximate but
+    # separates こだま from のぞみ cleanly)
+    TYPE_STOP_BUCKETS = {
+        "のぞみ": (0, 10),
+        "こだま": (12, 99),
+        "みずほ": (0, 8),
+        "さくら": (0, 10),
+    }
+
+    def match_direct(self, line_title, station, direction=None, train_type=None, top=3):
+        """Direct suki matching for feeds whose lines have no dokorail
+        timetable (shinkansen bundles are empty shells). Filters: line name,
+        station membership, direction (feed "down"/"up" vs the entry's
+        terminal order) and a stop-count bucket from the service type.
+        Returns [{key, direct: True, overlap, size}] - callers should only
+        trust a single-candidate result."""
+        if not line_title or not station:
+            return []
+        want = self._expand(line_names_for(line_title))
+        target = norm_station(station)
+        north = self.NORTH_TERMINALS.get(line_title, set())
+        lo, hi = self.TYPE_STOP_BUCKETS.get(train_type or "", (0, 99))
+        scored = []
+        for k in {kk for line in want for kk in self._line_pool.get(line, [])}:
+            hay = self._stops_norm[k]
+            if target not in hay:
+                continue
+            if direction == "down" and north and hay[0] not in north:
+                continue
+            if direction == "up" and north and hay[-1] not in north:
+                continue
+            if not (lo <= len(hay) <= hi):
+                continue
+            scored.append(
+                {"key": k, "direct": True, "overlap": 1.0, "size": len(hay)}
+            )
+        scored.sort(key=lambda c: c["size"])
+        return scored[:top]
+
     def match(self, stops, line_title=None, railway=None, top=3):
         """stops: ordered station names (ja). Returns ranked
         [{key, subseq, fuzzy, overlap, extra}] best first. line_title=None

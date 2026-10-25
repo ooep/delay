@@ -60,5 +60,9 @@ jobs:
             echo "board unchanged"
           else
             git commit -m "delays $(date -u +'%Y-%m-%dT%H:%MZ') $(python -c "import json;print(json.load(open('data/delays.json'))['delayed_count'])") late"
-            git push
+            # concurrent scheduled runs race on main - retry the push
+            for i in 1 2 3 4 5; do
+              git pull --no-rebase -X theirs origin main && git push && break
+              echo "push retry $i"; sleep 10
+            done
           fi
