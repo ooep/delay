@@ -192,12 +192,27 @@ class Source:
 
         return jrcentral.fetch(self)
 
+    def keihan_feed(self):
+        """Keihan zaisen-up position JSON (baker/keihan.py). Offline mode
+        replays the captured trainPositionList fixture."""
+        from . import keihan
+
+        return keihan.fetch(self)
+
     def jr_west_guide_feed(self):
         """JR-West official train-guide JSON (baker/jrwest_guide.py).
         Offline mode replays the captured area/position/station fixtures."""
         from . import jrwest_guide
 
         return jrwest_guide.fetch(self)
+
+    def odpt_feed(self, operator):
+        """ODPT odpt:Train feed (baker/odpt.py) - keyless public mirror for
+        Toei, keyed API for Keikyu/Tobu/YokohamaMunicipal when ODPT_KEY is
+        set. Offline mode replays the odpt-<operator>.json fixture."""
+        from . import odpt
+
+        return odpt.fetch(self, operator)
 
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark

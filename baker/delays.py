@@ -233,6 +233,7 @@ def bake(source, data_dir):
     feeds.append(("JR-East", source.jr_east_dokotrain_feed()))
     feeds.append(("Nankai", source.nankai_feed()))
     feeds.append(("JR-Central", source.jr_central_feed()))
+    feeds.append(("Keihan", source.keihan_feed()))
     feeds.append(("JR-West", source.jr_west_guide_feed()))
     for op, payload in feeds:
         if not payload or not payload.get("ok"):
