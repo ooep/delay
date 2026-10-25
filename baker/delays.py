@@ -36,6 +36,13 @@ def title_index(lines_catalog):
     return idx
 
 
+def norm_station_key(name):
+    """Station names normalized for cross-dataset comparison: parenthetical
+    disambiguators dropped (粉浜 stays 粉浜, 追分(北海道) -> 追分) and the
+    small-ke connector unified (霞ヶ関/霞ケ関)."""
+    return common.PAREN_RE.sub("", name or "").strip().replace("ヶ", "ケ").replace("ｹ", "ケ")
+
+
 class LegStore:
     """Decode + cache timetable legs for the railways that have delayed
     trains this run (a handful of bundle downloads)."""
@@ -169,6 +176,35 @@ class LegStore:
 
         return sorted(legs, key=window)[0]
 
+    def find_leg_by_position(self, railways, station, delay_min, tolerance=20):
+        """ID-less matching: the feed reports "at <station>, N min late" -
+        return the leg whose timetable has it stopping at that station
+        around (now - N). Stops AND times both participate (停站和时间基本
+        吻合); ties resolve to the nearest scheduled passage. For number-less
+        feeds (Hanshin-style slot boards) and as fallback when a feed number
+        has no dokorail leg (e.g. Nankai extras). Returns (leg, gap_min)."""
+        if not station:
+            return None, None
+        target = norm_station_key(station)
+        if not target:
+            return None, None
+        pass_time = self.now_min - delay_min
+        best, best_gap = None, None
+        for rid in railways or []:
+            for leg in self.railway_legs(rid):
+                for s in leg["stops"]:
+                    if norm_station_key(s["station"]) != target:
+                        continue
+                    arr = hhmm_to_min(s.get("arr") or s["dep"])
+                    dep = hhmm_to_min(s["dep"])
+                    gap = abs((arr + dep) / 2 - pass_time)
+                    if best_gap is None or gap < best_gap:
+                        best, best_gap = leg, gap
+                    break  # first occurrence of the station on this leg
+        if best is not None and best_gap <= tolerance:
+            return best, round(best_gap, 1)
+        return None, None
+
 
 def bake(source, data_dir):
     lines = json.loads((Path(data_dir) / "lines.json").read_text())
@@ -258,9 +294,21 @@ def bake(source, data_dir):
                     railways=railways_hint,
                     number_prefix=t.get("_number_prefix"),
                 )
+                match_method = "number" if leg else None
+                pos_gap = None
+                if not leg and t.get("_station"):
+                    # position-time fallback: the train reports where it is
+                    # and how late - find the timetable leg that fits
+                    leg, pos_gap = store.find_leg_by_position(
+                        railways_hint, t["_station"], round(delay / 60)
+                    )
+                    match_method = "position" if leg else None
                 if leg:
                     stations = [s["station"] for s in leg["stops"]]
                     entry["railway"] = leg["railway"]
+                    entry["match"] = match_method
+                    if match_method == "position":
+                        entry["position_gap_min"] = pos_gap
                     entry["scheduled"] = {
                         "dep": leg["dep"],
                         "arr": leg["arr"],

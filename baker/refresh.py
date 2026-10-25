@@ -86,7 +86,10 @@ def main():
         print("caches fresh enough, skipping")
         return
     slim = refresh(common.Source(), args.data_dir)
-    print(f"refreshed: {len(slim['lines'])} lines, realtime ops: {', '.join(slim['realtime_operators'])}")
+    if slim:
+        print(f"refreshed: {len(slim['lines'])} lines, realtime ops: {', '.join(slim['realtime_operators'])}")
+    else:
+        print("refresh failed; committed caches remain in place")
 
 
 if __name__ == "__main__":
