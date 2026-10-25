@@ -96,19 +96,21 @@ class LegStore:
         self.now_min = now_min
         self.by_railway = {}
         self.by_number = {}
+        self.cal_cache = {}
+        self.primary_cal = {}
 
-    def railway_legs(self, railway):
-        if railway in self.by_railway:
-            return self.by_railway[railway]
+    def railway_legs_cal(self, railway, cal):
+        """Legs from one specific calendar (cached per railway+calendar)."""
+        key = (railway, cal)
+        if key in self.cal_cache:
+            return self.cal_cache[key]
         entry = self.index.get(railway)
         line = self.lines.get(railway)
         legs = []
         if entry and line and entry.get("bundle"):
             names = line["stations"]
-            for cal in self.calendar_candidates(entry, self.weekday, self.today):
-                asset = entry["bundle"]["calendars"].get(cal)
-                if not asset:
-                    continue
+            asset = entry["bundle"]["calendars"].get(cal)
+            if asset:
                 for block in common.bundle_blocks(self.source.bundle(asset["url"]) or []):
                     if block[2] != railway:
                         continue
@@ -117,20 +119,53 @@ class LegStore:
                         if dates and self.today not in common.dated_runs(dates[1], dates[0]):
                             continue
                         decoded = common.decode_stops(stops, names)
-                        leg = {
-                            "railway": railway,
-                            "number": number,
-                            "type": meta.get("type"),
-                            "names": [n["ja"] for n in meta.get("names") or []],
-                            "stops": decoded,
-                            "dep": decoded[0]["dep"],
-                            "arr": decoded[-1].get("arr") or decoded[-1]["dep"],
-                            "calendar": cal,
-                        }
-                        legs.append(leg)
+                        legs.append(
+                            {
+                                "railway": railway,
+                                "number": number,
+                                "type": meta.get("type"),
+                                "names": [n["ja"] for n in meta.get("names") or []],
+                                "stops": decoded,
+                                "dep": decoded[0]["dep"],
+                                "arr": decoded[-1].get("arr") or decoded[-1]["dep"],
+                                "calendar": cal,
+                            }
+                        )
+        self.cal_cache[key] = legs
+        return legs
+
+    def railway_legs(self, railway):
+        """Primary calendar legs (first candidate that has this railway's
+        trains); further calendars stay available for find_leg fallback."""
+        if railway in self.by_railway:
+            return self.by_railway[railway]
+        entry = self.index.get(railway)
+        line = self.lines.get(railway)
+        legs = []
+        primary = None
+        if entry and line and entry.get("bundle"):
+            for cal in self.calendar_candidates(entry, self.weekday, self.today):
+                legs = self.railway_legs_cal(railway, cal)
                 if legs:
-                    break  # first calendar that actually has this railway's trains
+                    primary = cal
+                    break
         self.by_railway[railway] = legs
+        self.primary_cal[railway] = primary
+        return legs
+
+    def fallback_legs(self, railway):
+        """Legs from the railway's calendars NOT loaded as primary - used
+        when a feed train misses the primary pool (per-date runs like
+        4809T live in Dated while the primary Weekday table is loaded)."""
+        entry = self.index.get(railway)
+        if not entry:
+            return []
+        primary = self.primary_cal.get(railway)
+        legs = []
+        for cal in self.calendar_candidates(entry, self.weekday, self.today):
+            if cal == primary:
+                continue
+            legs.extend(self.railway_legs_cal(railway, cal))
         return legs
 
     @staticmethod
@@ -223,6 +258,14 @@ class LegStore:
             hit = match_pool(pool)
             if hit:
                 return hit
+        # calendar fallback: the train may live in a non-primary calendar of
+        # the same railways (Dated runs like 4809T while Weekday is loaded)
+        for r in railways or ([railway] if railway else []):
+            fb = self.fallback_legs(r)
+            if fb:
+                hit = match_pool(fb)
+                if hit:
+                    return hit
         return None
 
     def _closest(self, legs):
