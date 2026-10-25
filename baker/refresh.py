@@ -8,6 +8,7 @@ never touches these endpoints.
 """
 
 import argparse
+import json
 from pathlib import Path
 
 from . import common
