@@ -19,6 +19,7 @@ SUKI_STATIC = "https://jr-static.suki.ing/data"
 JST = timezone(timedelta(hours=9))
 GEOMETRY_URL_RE = re.compile(r"/rail/geometry/sha256/[0-9a-f]{64}\.json")
 TRAIN_SEARCH_HEADER = {"X-Train-Search": "1"}  # /api/* rejects calls without it
+PAREN_RE = re.compile(r"\s*[(（].*$")  # strip line-name section suffixes
 
 
 def http_get(url, headers=None, retries=3, timeout=30):
@@ -169,6 +170,13 @@ class Source:
         from . import jrkyushu
 
         return jrkyushu.fetch(self)
+
+    def jr_east_dokotrain_feed(self):
+        """JR-East どこトレ position JSON (baker/jreast_dokotrain.py).
+        Offline mode replays the captured status/master/position fixtures."""
+        from . import jreast_dokotrain
+
+        return jreast_dokotrain.fetch(self)
 
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark

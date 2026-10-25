@@ -101,6 +101,16 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
   19=新幹線），晚点车的完整停站时刻直接取自 JR 北海道自家 daiya 时刻表
   （不经 dokorail），车号去重（同一列车会在相邻区间的分组里重复出现），
   再按站序映射到 suki 键。花咲线 suki 侧暂无数据，只上板不映射。
+- **JR-East（JR東日本 东北/新潟/千葉/横浜エリア）走独立源**：`baker/jreast_dokotrain.py`
+  直连どこトレ `doko-train.jp` 的公开 JSON（`/json/trainstatus/lines_status.json`
+  汇总 + `/json/trainstatus/<線区ID>.json` 每线班次 + 线路/车站 master，无鉴权
+  无 WAF 问题）。`LATENCY`(分) 即晚点、车号自带 M/D 后缀与 dokorail bundle
+  一致；线路桥是通用实现（delays.py 的 title_index）：线区名剥括号/前缀后
+  对 dokorail railway 标题（如 外房線→JR-East.Sotobo、常磐線→JR-East.Joban），
+  匹配到腿再走统一站序映射。覆盖 78 线区；dokorail 没有的线（越後線、仙山線
+  等）只要 dokorail 侧有时刻表 bundle 就能全程映射，两边都没有的线路
+  只上板不映射。这一路正好补上 dokorail 端点被 Cloudflare 挡掉的 JR-East
+  实时数据。
 - **JR-Kyushu（九州）走独立源**：`baker/jrkyushu.py` 直连 goto-mirai web app
   的 `api/common/trainPosition?drivingRouteCode=C&upperLowerKbn=1|2&stationCode=S
   &isVisibleAllTrain=true`（站位槽制，字段 `trainNumber/trainKindInformationName/

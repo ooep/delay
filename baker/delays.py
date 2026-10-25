@@ -10,6 +10,7 @@ is a flat lookup table so jr.suki.ing tags its trains with zero join logic.
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from . import common, suki
@@ -21,6 +22,18 @@ MAX_CANDIDATES = 3
 def hhmm_to_min(s):
     h, m = s.split(":")
     return int(h) * 60 + int(m)
+
+
+def title_index(lines_catalog):
+    """Line base title (parenthetical section suffixes stripped, e.g.
+    東北本線（黒磯－仙台） -> 東北本線; the JR prefix is dropped too since
+    dokorail titles mix both, like JR越後線) -> dokorail railway ids."""
+    jr = re.compile(r"^JR")
+    idx = {}
+    for rid, v in lines_catalog.items():
+        base = jr.sub("", common.PAREN_RE.sub("", v["ja"]).strip()).strip()
+        idx.setdefault(base, []).append(rid)
+    return idx
 
 
 class LegStore:
@@ -132,6 +145,7 @@ def bake(source, data_dir):
     except Exception as exc:  # noqa: BLE001 - flaky CDN: degrade to no-legs
         print(f"timetable index unavailable ({exc}); baking without legs")
         index = {}
+    titles = title_index(lines["lines"])
     now = common.jst_now()
     store = LegStore(source, index, lines["lines"], now.date().isoformat(), now.weekday(), now.hour * 60 + now.minute)
     suki_index = suki.SukiIndex.load(data_dir)
@@ -144,6 +158,7 @@ def bake(source, data_dir):
     feeds.append(("JR-Shikoku", source.jr_shikoku_feed()))
     feeds.append(("JR-Hokkaido", source.jr_hokkaido_feed()))
     feeds.append(("JR-Kyushu", source.jr_kyushu_feed()))
+    feeds.append(("JR-East", source.jr_east_dokotrain_feed()))
     for op, payload in feeds:
         if not payload or not payload.get("ok"):
             op_stats[op] = {"feed": "unavailable"}
@@ -187,6 +202,10 @@ def bake(source, data_dir):
                 entry["scheduled"] = {k: v for k, v in sched.items() if not k.startswith("_")}
             else:
                 railways_hint = t.get("_railways")
+                if not railways_hint and t.get("_line_ja"):
+                    # line-name-only sources (doko-train): resolve the line
+                    # title to dokorail railways for timetable legs
+                    railways_hint = titles.get(t["_line_ja"])
                 for rid in railways_hint or []:
                     store.railway_legs(rid)
                 leg = store.find_leg(
@@ -198,6 +217,7 @@ def bake(source, data_dir):
                 )
                 if leg:
                     stations = [s["station"] for s in leg["stops"]]
+                    entry["railway"] = leg["railway"]
                     entry["scheduled"] = {
                         "dep": leg["dep"],
                         "arr": leg["arr"],
