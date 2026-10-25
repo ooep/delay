@@ -209,6 +209,14 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
       tenjin_omuta/`（NNR 系统，84KB 页），深夜处于「大幅遅延で表示不可」
       错误态，API 需从 common/js/script.js 顺藤摸瓜；
     - **北越急行** — HTML+画像（位置画成图片，数据不可机器读取，放弃）。
+    - **阪急**（2026-10-26 白天浏览器实测）— webview 页
+      `cdn.hankyu-app.com/webview/train/position?line_id=N&dtype=a` 是
+      Nuxt 壳（fanship.js 桥等待原生 app 注入 token），纯浏览器内 JS 全部
+      200 但零 API 调用、空壳渲染——需要 app 流量代理抓包才能拿到 v1 API
+      的有效 token，正式搁置。旧 gist 里的 token 已失效。
+    - **名鉄 Train-Net**（suki 名古屋本線 352）— `twn.meitetsu.co.jp`
+      从本网络完全不可达（DNS/TLS 失败，海外 IP 疑似被拒）；GitHub
+      Actions runner 同为海外 IP，接入前需先在 runner 上验证可达性。
   - **第三批：地方中小（2026-10-26 深夜批量探测，suki 覆盖→优先级）**：
     **北総線** 50 班、**富山地方鉄道本線** 28、**りんかい線** 21（官网运行情报
     在 service.twr.co.jp/service_info/information.html，深夜为 2.3KB 空壳需
