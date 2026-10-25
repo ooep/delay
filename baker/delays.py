@@ -214,15 +214,17 @@ class LegStore:
         elif railway:
             pools = [self.railway_legs(railway)]
             if op:
-                pools.append(
-                    [
-                        leg
-                        for legs in self.by_railway.values()
-                        for leg in legs
-                        if leg["railway"] != railway
-                        and leg["railway"].startswith(op + ".")
-                    ]
-                )
+                # every same-operator railway with a bundle - a train filed
+                # under one line often runs through onto a sibling line
+                # (4002D: feed says Kotoku, dokorail files it under
+                # Tokushima), so the fallback pool must be complete
+                same_op = []
+                for rid, e in self.index.items():
+                    if not rid.startswith(op + ".") or rid == railway:
+                        continue
+                    if (e.get("bundle") or {}).get("calendars"):
+                        same_op += self.railway_legs(rid)
+                pools.append(same_op)
         else:
             pools = []
         base = number_prefix or number or ""
@@ -415,6 +417,8 @@ def bake(source, data_dir):
             }
             if t.get("_station"):
                 entry["from"] = t["_station"]
+            if t.get("_nickname"):
+                entry["name"] = t["_nickname"]
             if t.get("_dest"):
                 entry["to"] = t["_dest"]
             if t.get("_or_more"):

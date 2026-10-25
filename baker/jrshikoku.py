@@ -61,33 +61,53 @@ def _delay_to_seconds(raw):
         return 0
 
 
+KIND_NAMES = {"normal": "普通", "rapid": "快速", "express": "特急", "ltdexp": "特急"}
+
+
 def parse_raw(data):
-    """Raw train.json -> dokorail-feed-shaped payload (or None if the
-    shape is not recognized)."""
+    """Raw train list -> dokorail-feed-shaped payload (or None if the
+    shape is not recognized). Through services are listed once per segment
+    they cross (same TrainNum under several Line codes) - de-duplicated by
+    train number, keeping the max delay. Type strings carry the nickname
+    after a colon ("express:しおかぜ６号")."""
     trains = data.get("train") if isinstance(data, dict) else data
     if not isinstance(trains, list):
         return None
     body = []
+    by_number = {}
     for t in trains:
         if not isinstance(t, dict):
             continue
         railway = _railway(t.get("Line") or t.get("line"))
-        number = t.get("TrainNum") or t.get("TrainNumber")
+        number = str(t.get("TrainNum") or t.get("TrainNumber") or "")
         if not railway or not number:
             continue
-        body.append(
-            {
-                "owl:sameAs": f"JR-Shikoku:{railway}.{number}",
-                "odpt:railway": "odpt.Railway:" + railway,
-                "odpt:trainNumber": str(number),
-                "odpt:delay": _delay_to_seconds(t.get("delay")),
-                "odpt:fromStation": None,
-                "odpt:toStation": None,
-                "odpt:trainType": None,
-                "odpt:carComposition": None,
-                "_station": t.get("Pos") or None,  # human-readable position text
-            }
-        )
+        delay_sec = _delay_to_seconds(t.get("delay"))
+        prev = by_number.get(number)
+        if prev is not None:
+            if delay_sec > prev["odpt:delay"]:
+                prev["odpt:delay"] = delay_sec
+                prev["_railway"] = railway
+                prev["_station"] = t.get("Pos") or prev.get("_station")
+            continue
+        raw_type = str(t.get("Type") or "").strip()
+        kind, _, nickname = raw_type.partition(":")
+        kind = KIND_NAMES.get(kind.strip(), kind.strip()) or None
+        entry = {
+            "owl:sameAs": f"JR-Shikoku:{railway}.{number}",
+            "odpt:railway": "odpt.Railway:" + railway,
+            "odpt:trainNumber": number,
+            "odpt:delay": delay_sec,
+            "odpt:fromStation": None,
+            "odpt:toStation": None,
+            "odpt:trainType": kind,
+            "odpt:carComposition": None,
+            "_station": t.get("Pos") or None,  # human-readable position text
+            "_nickname": nickname.strip() or None,
+            "_railway": railway,
+        }
+        by_number[number] = entry
+        body.append(entry)
     return {
         "ok": True,
         "fetchedAt": common.jst_now().isoformat(),
