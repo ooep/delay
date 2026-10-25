@@ -172,8 +172,16 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
     占位页），深夜取不到样本。待白天抓一次响应体确认字段——特别是有无
     per-train 晚点分钟（新干线对外多为线级「約○分の遅れ」，若无则按线级
     公告接入）。
-  - **名鉄/京成/東急/西武/京王/相鉄** — 入口页已定位，数据层未追踪
-    （深夜站点慢/404/SPA，需白天逐个浏览器抓包）。
+  - **名鉄** — 深夜已侦察：`top.meitetsu.co.jp/trainlocation/TrainRunningPositionNH.aspx`
+    （另有 TK/GN1/MY 区段变体页）。**服务端渲染**：列车位置/车次直接内嵌在
+    328KB 的 HTML 里（无独立 JSON 端点），更新=整页刷新；页面声明含遅れ显示。
+    接入方式=HTML 解析器（PopupTrainInformation 块），深夜空图无法确认填充
+    结构，需白天抓一次带车运行时的样本。
+  - **東急/西武/京王/相鉄/京成** — 走「リンクトレイン」官方 app 互连（各 app
+    内 WebView 加载各自的走行位置页，如京急的 app-kq.net 模式）。各家的
+    WebView 域名未公开、深夜 DNS/404 探测无效（traininfo.seiburailway.jp
+    连接超时），需白天用浏览器从各家 app 官网入口逐个抓 WebView URL。
+    相互連携成员参考：東急 2019/3/25 新闻稿（10 社互连）、西武 2020/7。
 - 晚点语义：`odpt:delay` 秒、按分钟量化、JR-West 封顶 3660s（显示 +61），
   字段缺失 = 未知（当准点显示），阈值 ≥60s。
 - baker 的 commit 会保住仓库活跃度，scheduled workflow 不会被 60 天规则停用。
