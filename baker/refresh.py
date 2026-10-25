@@ -29,42 +29,51 @@ def needed(data_dir, force):
 
 def refresh(source, data_dir):
     root = Path(data_dir)
-    lines = source.geometry_catalog()
-    # keep only what delays.py consumes: station order/names + realtime flag
-    slim = {"realtime_operators": set(), "lines": {}}
-    for op in lines["operators"]:
-        for rail in op["railways"]:
-            stations = []
-            by_id = {}
-            for raw in rail.get("stations") or []:
-                names = raw[1] if isinstance(raw[1], dict) else {"ja": str(raw[1]), "en": str(raw[1])}
-                ids = raw[0] if isinstance(raw[0], list) else [raw[0]]
-                stations.append(names["ja"])
-                for sid in ids:
-                    by_id[str(sid).rsplit(".", 1)[-1]] = names["ja"]
-            rt = bool(rail.get("realtime", op.get("realtime")))
-            slim["lines"][rail["id"]] = {
-                "ja": rail["title"]["ja"],
-                "en": rail["title"]["en"],
-                "realtime": rt,
-                "stations": stations,
-                "stations_by_id": by_id,
-            }
-            if rt:
-                slim["realtime_operators"].add(op["operator"])
-    slim["realtime_operators"] = sorted(slim["realtime_operators"])
-    (root / "lines.json").write_text(json.dumps(slim, ensure_ascii=False, separators=(",", ":")))
+    slim = None
+    try:
+        cat = source.geometry_catalog()
+        slim = {"realtime_operators": set(), "lines": {}}
+        for op in cat["operators"]:
+            for rail in op["railways"]:
+                stations = []
+                by_id = {}
+                for raw in rail.get("stations") or []:
+                    names = raw[1] if isinstance(raw[1], dict) else {"ja": str(raw[1]), "en": str(raw[1])}
+                    ids = raw[0] if isinstance(raw[0], list) else [raw[0]]
+                    stations.append(names["ja"])
+                    for sid in ids:
+                        by_id[str(sid).rsplit(".", 1)[-1]] = names["ja"]
+                rt = bool(rail.get("realtime", op.get("realtime")))
+                slim["lines"][rail["id"]] = {
+                    "ja": rail["title"]["ja"],
+                    "en": rail["title"]["en"],
+                    "realtime": rt,
+                    "stations": stations,
+                    "stations_by_id": by_id,
+                }
+                if rt:
+                    slim["realtime_operators"].add(op["operator"])
+        slim["realtime_operators"] = sorted(slim["realtime_operators"])
+        (root / "lines.json").write_text(json.dumps(slim, ensure_ascii=False, separators=(",", ":")))
+    except Exception as exc:
+        # committed caches keep the bake functional; report and continue
+        print(f"lines.json refresh failed ({type(exc).__name__}: {str(exc)[:100]}); keeping committed copy")
 
     suki = root / "suki"
     suki.mkdir(parents=True, exist_ok=True)
-    (suki / "tmaps.json").write_bytes(common.http_get(common.SUKI_STATIC + "/tmaps.json"))
-    (suki / "lines_map.json").write_bytes(common.http_get(common.SUKI_STATIC + "/lines_map.json"))
-    # full timetables with times (trains_wd/su/sa.json, ~12 MB each) - staged
-    # for time-based one-to-one resolution against delayed trains
-    for name in ("trains_wd", "trains_sa", "trains_su"):
-        (suki / f"{name}.json").write_bytes(
-            common.http_get(common.SUKI_STATIC + f"/data/{name}.json")
-        )
+    # SUKI_STATIC already ends in /data - never double it
+    files = [
+        ("tmaps.json", "tmaps.json"),
+        ("lines_map.json", "lines_map.json"),
+        ("trains_wd.json", "trains_wd.json"),
+        ("trains_sa.json", "trains_sa.json"),
+        ("trains_su.json", "trains_su.json"),
+    ]
+    for local_name, remote_name in files:
+        try:
+            (suki / local_name).write_bytes(common.http_get(f"{common.SUKI_STATIC}/{remote_name}"))
+        except Exception as exc:
+            print(f"suki/{local_name} refresh failed ({type(exc).__name__}: {str(exc)[:100]}); keeping committed copy")
     return slim
 
 
