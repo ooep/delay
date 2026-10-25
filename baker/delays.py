@@ -58,7 +58,7 @@ class LegStore:
         legs = []
         if entry and line and entry.get("bundle"):
             names = line["stations"]
-            for cal in self.calendar_candidates(entry, self.weekday):
+            for cal in self.calendar_candidates(entry, self.weekday, self.today):
                 asset = entry["bundle"]["calendars"].get(cal)
                 if not asset:
                     continue
@@ -87,23 +87,36 @@ class LegStore:
         return legs
 
     @staticmethod
-    def calendar_candidates(entry, weekday):
+    def calendar_candidates(entry, weekday, today_iso):
         """Calendar-name candidates for the date, in preference order.
-        dokorail bundles are inconsistent: JR lines use Weekday/
-        SaturdayHoliday/Dated, Nankai uses Weekday/Saturday/Holiday - so
-        beyond the day-appropriate name, fall back to whatever exists."""
-        avail = list((entry.get("bundle") or {}).get("calendars") or {})
-        primary = "Weekday" if weekday < 5 else (
-            "SaturdayHoliday" if weekday == 5 else "SaturdayHoliday"
-        )
-        if weekday == 6:  # Sunday: Holiday dialect before Saturday
-            order = [primary, "Holiday", "Saturday"]
+        When the railway has a Dated bundle covering today, it comes first -
+        that's what dokorail's own client uses (per-date schedules override
+        the generic Weekday/SaturdayHoliday tables). Naming dialects vary
+        (JR lines: Weekday/SaturdayHoliday/Dated; Nankai:
+        Weekday/Saturday/Holiday), so anything else available trails as a
+        last resort."""
+        bundle = entry.get("bundle") or {}
+        avail = list(bundle.get("calendars") or {})
+        order = []
+        dated = entry.get("dated") or {}
+        if dated.get("start"):
+            try:
+                from datetime import date, timedelta
+
+                start = date.fromisoformat(dated["start"])
+                end = start + timedelta(days=int(dated.get("days", 0)) - 1)
+                if start <= date.fromisoformat(today_iso) <= end:
+                    order.append("Dated")
+            except Exception:
+                pass
+        if weekday < 5:
+            order.append("Weekday")
         elif weekday == 5:
-            order = [primary, "Saturday", "Holiday"]
-        else:
-            order = [primary]
-        order += ["Dated"]
-        return [c for c in dict.fromkeys(order + avail) if c in avail]
+            order += ["SaturdayHoliday", "Saturday"]
+        else:  # Sunday: Holiday dialect before Saturday
+            order += ["SaturdayHoliday", "Holiday", "Saturday"]
+        order += ["Weekday", "SaturdayHoliday", "Holiday", "Saturday", "Dated"]
+        return [c for c in dict.fromkeys(order) if c in avail]
 
     def find_leg(self, railway, number, op=None, railways=None, number_prefix=None):
         """Best leg for a feed train, operator-scoped. `railways` lists the
