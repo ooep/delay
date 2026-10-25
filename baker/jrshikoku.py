@@ -1,26 +1,33 @@
 """JR-Shikoku (四国) live train feed for the baker.
 
 Source: the company's own position map at https://train.jr-shikoku.co.jp/
-(rendered by obfuscated traindisp_ob.js; its data endpoint and JSON keys
-were decoded from that script):
-    GET /data/train/train.json      (Pragma: no-cache, Referer set)
-    keys per train: Line, TrainNum, Type, Direction, delay, Pos, DispNum
+(obfuscated traindisp_ob.js; endpoints decoded from that script and live
+browser XHR capture):
 
-Line codes map onto dokorail's own JR-Shikoku railway ids, so timetable
-legs come from dokorail's bundles via the normal LegStore path.
+    GET /g?arg1=train&arg2=train      (Cookie: user_rule=true, Referer set)
+        -> bare list, keys per train: Line, TrainNum, Type, Direction,
+           delay, Pos (human-readable location text), DispNum
 
-IMPORTANT: JR-Shikoku suspended this feed on 2026-10-22 (official X
-announcement, no restoration date); the endpoint answers 403 while the
-HTML page still loads. fetch() treats any failure as "unavailable" and
-the board simply omits the operator - when distribution resumes, JR-Shikoku
-trains appear in data/delays.json with no code change, exactly like the
-JR-East 403 case on dokorail's feed proxy.
+Access requires the site's user-agreement consent: the root page gates on a
+#modal_rule dialog whose 「はい」 button runs UseRuleYesProc() which sets
+`user_rule=true` (client-side cookie) - requests must send that cookie or
+the server answers 403. The old /data/train/*.json paths stayed 403 after
+the 2026-10-22 suspension; the /g CGI gateway is the live one (confirmed
+2026-10-26).
+
+delay is minutes when numeric; "入線"/"発車" are position statuses (treat
+as 0). Line codes map onto dokorail's own JR-Shikoku railway ids, so
+timetable legs come from dokorail's bundles via the normal LegStore path.
 """
 
 from . import common
 
 BASE = "https://train.jr-shikoku.co.jp"
-TRAIN_JSON = BASE + "/data/train/train.json"
+GATEWAY_URL = BASE + "/g?arg1=train&arg2=train"
+CONSENT_HEADERS = {
+    "Cookie": "user_rule=true",
+    "Referer": BASE + "/",
+}
 
 # JR-Shikoku line codes (from the map script / page assets) -> dokorail railway ids
 LINE_MAP = {
@@ -78,6 +85,7 @@ def parse_raw(data):
                 "odpt:toStation": None,
                 "odpt:trainType": None,
                 "odpt:carComposition": None,
+                "_station": t.get("Pos") or None,  # human-readable position text
             }
         )
     return {
@@ -90,17 +98,10 @@ def parse_raw(data):
 
 def fetch():
     """Returns a dokorail-feed-shaped payload, or None when unavailable
-    (suspended / network error / unexpected shape)."""
+    (consent cookie rejected / network error / unexpected shape)."""
     try:
-        data = common.get_json(
-            TRAIN_JSON,
-            headers={
-                "Referer": BASE + "/sp.html",
-                "Pragma": "no-cache",
-                "Cache-Control": "no-cache",
-                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
-            },
-        )
-    except Exception:
+        data = common.get_json(GATEWAY_URL, headers=dict(CONSENT_HEADERS))
+    except Exception as exc:
+        print(f"jrshikoku feed: {type(exc).__name__}: {str(exc)[:120]}")
         return None
     return parse_raw(data)
