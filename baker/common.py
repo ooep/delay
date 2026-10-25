@@ -206,6 +206,13 @@ class Source:
 
         return hanshin.fetch(self)
 
+    def kintetsu_feed(self):
+        """Kintetsu LocationWeb server-rendered pages (baker/kintetsu.py).
+        Offline mode replays captured kt-w*.html fixtures."""
+        from . import kintetsu
+
+        return kintetsu.fetch(self)
+
     def jr_west_guide_feed(self):
         """JR-West official train-guide JSON (baker/jrwest_guide.py).
         Offline mode replays the captured area/position/station fixtures."""

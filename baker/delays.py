@@ -321,6 +321,7 @@ def bake(source, data_dir):
     feeds.append(("JR-Central", source.jr_central_feed()))
     feeds.append(("Keihan", source.keihan_feed()))
     feeds.append(("Hanshin", source.hanshin_feed()))
+    feeds.append(("Kintetsu", source.kintetsu_feed()))
     feeds.append(("JR-West", source.jr_west_guide_feed()))
     # ODPT operators (Toei keyless; Tobu/YokohamaMunicipal keyed). Keikyu has
     # its own keyless web API (baker/keikyu.py)
@@ -385,6 +386,13 @@ def bake(source, data_dir):
                             r for r in titles.get(part, [])
                             if r.startswith(op + ".") and r not in railways_hint
                         ]
+                    # cross-operator through services (瀬戸大橋線: the JR-West
+                    # feed reports a train whose leg lives under JR-Shikoku)
+                    # - second pass over every railway sharing the title
+                    railways_hint += [
+                        r for r in titles.get(parts[0], [])
+                        if r not in railways_hint
+                    ]
                 for rid in railways_hint or []:
                     store.railway_legs(rid)
                 leg = store.find_leg(
