@@ -10,6 +10,7 @@ is a flat lookup table so jr.suki.ing tags its trains with zero join logic.
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 
@@ -369,7 +370,17 @@ def bake(source, data_dir):
     # ODPT operators (Toei keyless; Tobu/YokohamaMunicipal keyed). Keikyu has
     # its own keyless web API (baker/keikyu.py)
     feeds.append(("Keikyu", source.keikyu_feed()))
-    for _odpt_op in ("Toei", "Tobu", "YokohamaMunicipal"):
+    _odpt_ops = ["Toei", "Tobu", "YokohamaMunicipal"]
+    if os.environ.get("ODPT_KEY", "").strip():
+        # with a consumer key the keyed API covers the rest of the 東京圏
+        # cluster too (東京メトロ/東急/相鉄系/埼玉/モノレール/りんかい等);
+        # without it those operators answer empty, so they stay off the list
+        _odpt_ops += [
+            "TokyoMetro", "Tokyu", "KantoRailway", "SaitamaRailway",
+            "SaitamaTransit", "TWR", "TokyoMonorail", "Rinkai",
+            "Yurikamome", "Minatomirai", "Shibayama", "ToyoRapid",
+        ]
+    for _odpt_op in _odpt_ops:
         feeds.append((_odpt_op, source.odpt_feed(_odpt_op)))
     for op, payload in feeds:
         if not payload or not payload.get("ok"):
@@ -425,10 +436,10 @@ def bake(source, data_dir):
                     # Kintetsu short names (奈良線) vs dokorail full titles
                     # (近畿日本鉄道奈良線): try the short form, its 名-grown
                     # variant and composites (白新線・羽越本線)
-                    candidates = [raw_title, "近畿日本鉄道" + raw_title]
+                    candidates = [raw_title, "近畿日本鉄道" + raw_title, "近鉄" + raw_title]
                     parts = [raw_title] + raw_title.split("・")
                     for part in parts:
-                        candidates += [part, "近畿日本鉄道" + part]
+                        candidates += [part, "近畿日本鉄道" + part, "近鉄" + part]
                     railways_hint = []
                     for part in candidates:
                         railways_hint += [
