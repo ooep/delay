@@ -22,10 +22,16 @@ TRAIN_SEARCH_HEADER = {"X-Train-Search": "1"}  # /api/* rejects calls without it
 
 
 def http_get(url, headers=None, retries=3, timeout=30):
+    # datacenter IPs with the default Python-urllib UA get challenged by
+    # Cloudflare/Akamai on dokorail and the JR sites - always look like a
+    # browser; per-call headers still take precedence
+    base = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"}
+    if headers:
+        base.update(headers)
     last = None
     for attempt in range(retries):
         try:
-            req = urllib.request.Request(url, headers=headers or {})
+            req = urllib.request.Request(url, headers=base)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = resp.read()
                 if resp.headers.get("Content-Encoding") == "gzip":
@@ -39,7 +45,7 @@ def http_get(url, headers=None, retries=3, timeout=30):
                     ctx = ssl.create_default_context()
                     ctx.check_hostname = False
                     ctx.verify_mode = ssl.CERT_NONE
-                    req = urllib.request.Request(url, headers=headers or {})
+                    req = urllib.request.Request(url, headers=base)
                     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
                         data = resp.read()
                         if resp.headers.get("Content-Encoding") == "gzip":
