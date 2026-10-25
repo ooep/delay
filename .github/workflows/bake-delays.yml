@@ -33,6 +33,11 @@ jobs:
   bake:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # optional: ODPT consumer key (developer.odpt.org, free) enables
+      # Keikyu/Tobu/YokohamaMunicipal via api.odpt.org; without it only
+      # Toei comes through the keyless public mirror
+      ODPT_KEY: ${{ secrets.ODPT_KEY }}
     steps:
       - uses: actions/checkout@v4
 

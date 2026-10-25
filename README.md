@@ -144,6 +144,14 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
   （1303M、1303~1）。**替代了 dokorail 的 JR-West 喂送**（其 Cloudflare 403
   拦 runner），JR-West 从此不依赖 dokorail 可用性。请求串行 + 0.05s 间隔
   （每轮约 50 个文件，覆盖 45 线）。
+- **Toei/Keikyu/Tobu/YokohamaMunicipal 改走 ODPT（baker/odpt.py）**：这四家
+  原由 dokorail 喂送，其 Cloudflare 403 拦 runner——改为直连
+  公共交通オープンデータセンター。`api-public.odpt.org` 免 key 镜像已实证
+  携带都営实时（白天 82 班在途、含 odpt:delay 秒）；京急/東武/横浜市営需要
+  免费 consumer key——**去 developer.odpt.org 注册，GitHub 仓库 Settings →
+  Secrets → Actions 添加 `ODPT_KEY`**（workflow 已注入 env），有 key 后
+  四家全自动经 api.odpt.org 进板。odpt:Train 对象与 dokorail 透传格式一致
+  （odpt:railway/odpt:trainNumber/odpt:delay），走标准 catalog→腿→suki 流程。
 - 私铁侦察备忘（2026-10-26 夜间侦察）：
   - **阪神** — schema 已完整捕获：`apl.hanshin.co.jp/5/data/ikisaki_<行先>.json`
     （`forinf[].trninf[]`: no/typ/pos/stp/**dly**/dlyflg 槽位制）+ masters
