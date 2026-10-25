@@ -1,0 +1,77 @@
+name: bake-delays
+
+# The whole pipeline in one workflow:
+#   - every run (*/10): dokorail live feeds -> data/delays.json
+#     (only the timetable bundles of lines with delayed trains are fetched)
+#   - Sundays / when missing: refresh the slow-moving caches - dokorail
+#     geometry catalog (data/lines.json) and jr.suki.ing's tmaps.json +
+#     lines_map.json snapshots (data/suki/)
+#
+# jr.suki.ing reads data/delays.json via Pages/jsDelivr. Its by_suki_key
+# table tags the site's own trains with zero join logic. Board carries
+# generated_at so the UI can show its age; GitHub cron jitters, so treat
+# this as a refreshed snapshot, not a realtime stream.
+
+on:
+  schedule:
+    # 运行窗口: 东京时间 05:00 - 次日 02:00 (JST = UTC+9)
+    #   JST 05:00-26:00  =  UTC 20:00-23:59 (当日) + 00:00-17:00 (次日)
+    # GitHub cron 有 5-20 分钟抖动, 窗口边缘的班次可能略偏
+    - cron: "*/10 20-23 * * *"
+    - cron: "*/10 0-16 * * *"
+    - cron: "0 17 * * *"    # 最后一班: JST 02:00 整
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bake-delays
+  cancel-in-progress: true
+
+jobs:
+  bake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Refresh weekly caches (Sunday or first run)
+        run: |
+          need=0
+          [ -f data/lines.json ] || need=1
+          [ -f data/suki/tmaps.json ] || need=1
+          [ "$(date -u +%u)" = 7 ] && need=1
+          if [ "$need" = 1 ]; then
+            python -m baker.lines --data-dir data
+            python - <<'EOF'
+            from pathlib import Path
+            from baker import common
+            src = common.Source()
+            out = Path("data/suki"); out.mkdir(parents=True, exist_ok=True)
+            (out / "tmaps.json").write_bytes(common.http_get(common.SUKI_STATIC + "/tmaps.json"))
+            (out / "lines_map.json").write_bytes(common.http_get(common.SUKI_STATIC + "/lines_map.json"))
+            print("suki cache refreshed")
+            EOF
+          else
+            echo "caches fresh enough, skipping"
+          fi
+
+      - name: Bake delay board
+        run: python -m baker.delays --data-dir data
+
+      - name: Commit if changed
+        run: |
+          git config user.name "baker[bot]"
+          git config user.email "baker@users.noreply.github.com"
+          git add data/delays.json data/lines.json data/suki
+          if git diff --cached --quiet; then
+            echo "board unchanged"
+          else
+            git commit -m "delays $(date -u +'%Y-%m-%dT%H:%MZ') $(python -c "import json;print(json.load(open('data/delays.json'))['delayed_count'])") late"
+            git push
+          fi

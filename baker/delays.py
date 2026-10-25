@@ -1,0 +1,272 @@
+"""Bake data/delays.json: the current delayed-train list from dokorail,
+each entry mapped onto jr.suki.ing timetable keys.
+
+One feed snapshot per run, per-operator fault tolerance (JR-East answers
+403 today; it joins automatically once dokorail enables it), and only the
+bundles of lines that actually have delayed trains get downloaded. The
+output is deliberately small (~100 trains) and site-ready: `by_suki_key`
+is a flat lookup table so jr.suki.ing tags its trains with zero join logic.
+"""
+
+import argparse
+import json
+from pathlib import Path
+
+from . import common, suki
+
+DELAY_THRESHOLD_SECONDS = 60
+MAX_CANDIDATES = 3
+
+
+def hhmm_to_min(s):
+    h, m = s.split(":")
+    return int(h) * 60 + int(m)
+
+
+class LegStore:
+    """Decode + cache timetable legs for the railways that have delayed
+    trains this run (a handful of bundle downloads)."""
+
+    def __init__(self, source, index, lines, today_iso, weekday, now_min):
+        self.source = source
+        self.index = index
+        self.lines = lines
+        self.today = today_iso
+        self.weekday = weekday
+        self.now_min = now_min
+        self.by_railway = {}
+        self.by_number = {}
+
+    def railway_legs(self, railway):
+        if railway in self.by_railway:
+            return self.by_railway[railway]
+        entry = self.index.get(railway)
+        line = self.lines.get(railway)
+        legs = []
+        if entry and line and entry.get("bundle"):
+            names = line["stations"]
+            dow = "Weekday" if self.weekday < 5 else "SaturdayHoliday"
+            for cal in (dow, "Dated"):
+                asset = entry["bundle"]["calendars"].get(cal)
+                if not asset:
+                    continue
+                for block in common.bundle_blocks(self.source.bundle(asset["url"]) or []):
+                    if block[2] != railway:
+                        continue
+                    for number, stops, meta in block[5]:
+                        dates = meta.get("dates")
+                        if dates and self.today not in common.dated_runs(dates[1], dates[0]):
+                            continue
+                        decoded = common.decode_stops(stops, names)
+                        leg = {
+                            "railway": railway,
+                            "number": number,
+                            "type": meta.get("type"),
+                            "names": [n["ja"] for n in meta.get("names") or []],
+                            "stops": decoded,
+                            "dep": decoded[0]["dep"],
+                            "arr": decoded[-1].get("arr") or decoded[-1]["dep"],
+                            "calendar": cal,
+                        }
+                        legs.append(leg)
+        self.by_railway[railway] = legs
+        return legs
+
+    def find_leg(self, railway, number, op=None, railways=None, number_prefix=None):
+        """Best leg for a feed train, operator-scoped. `railways` lists the
+        dokorail railways to search (self-contained operators like JR-Kyushu
+        know their routes); with `number_prefix`, legs match by number
+        prefix (feed gives bare "3222", bundles carry "3222M"). Ties prefer
+        the leg whose window brackets now, then the shortest suffix."""
+        if railways:
+            pools = [self.railway_legs(r) for r in railways]
+        elif railway:
+            pools = [self.railway_legs(railway)]
+            if op:
+                pools.append(
+                    [
+                        leg
+                        for legs in self.by_railway.values()
+                        for leg in legs
+                        if leg["railway"] != railway
+                        and leg["railway"].startswith(op + ".")
+                    ]
+                )
+        else:
+            pools = []
+        base = number_prefix or number or ""
+
+        def match_pool(pool):
+            exact = [l for l in pool if l["number"] == base]
+            if exact:
+                return self._closest(exact)
+            cands = [l for l in pool if l["number"].startswith(base)]
+            if cands:
+                # "3222M" beats a longer coincidental "32225M"
+                cands.sort(key=lambda l: (len(l["number"]),))
+                return self._closest(cands)
+            legs = [l for l in pool if l["number"].startswith(base + ".")]
+            if legs:
+                return self._closest(legs)
+            return None
+
+        for pool in pools:
+            hit = match_pool(pool)
+            if hit:
+                return hit
+        return None
+
+    def _closest(self, legs):
+        def window(leg):
+            dep, arr = hhmm_to_min(leg["dep"]), hhmm_to_min(leg["arr"])
+            return 0 if dep <= self.now_min <= arr else min(abs(self.now_min - dep), abs(self.now_min - arr))
+
+        return sorted(legs, key=window)[0]
+
+
+def bake(source, data_dir):
+    lines = json.loads((Path(data_dir) / "lines.json").read_text())
+    realtime_ops = sorted(lines["realtime_operators"])
+    try:
+        index = source.timetable_index()["railways"]
+    except Exception as exc:  # noqa: BLE001 - flaky CDN: degrade to no-legs
+        print(f"timetable index unavailable ({exc}); baking without legs")
+        index = {}
+    now = common.jst_now()
+    store = LegStore(source, index, lines["lines"], now.date().isoformat(), now.weekday(), now.hour * 60 + now.minute)
+    suki_index = suki.SukiIndex.load(data_dir)
+
+    board = []
+    op_stats = {}
+    feeds = [(op, source.train_feed(op)) for op in realtime_ops]
+    # Operators with their own position services (suspended/403 -> None and
+    # silently skipped, auto-join on recovery):
+    feeds.append(("JR-Shikoku", source.jr_shikoku_feed()))
+    feeds.append(("JR-Hokkaido", source.jr_hokkaido_feed()))
+    feeds.append(("JR-Kyushu", source.jr_kyushu_feed()))
+    for op, payload in feeds:
+        if not payload or not payload.get("ok"):
+            op_stats[op] = {"feed": "unavailable"}
+            continue
+        body = payload.get("body") or []
+        delayed = 0
+        for t in body:
+            delay = t.get("odpt:delay")
+            if delay is None or delay < DELAY_THRESHOLD_SECONDS:
+                continue
+            delayed += 1
+            railway = (t.get("odpt:railway") or "").replace("odpt.Railway:", "")
+            line = lines["lines"].get(railway, {})
+            # self-contained operators (JR-Hokkaido) carry their own line
+            # name and stop pattern; dokorail-based ones use the catalog
+            line_ja = line.get("ja") or t.get("_line_ja")
+            suki_line = line.get("ja") or t.get("_suki_line")
+            entry = {
+                "op": op,
+                "line": line_ja or railway,
+                "railway": railway,
+                "number": t.get("odpt:trainNumber"),
+                "type": (t.get("odpt:trainType") or "").rsplit(".", 1)[-1] or None,
+                "delay_min": round(delay / 60),
+                "delay_s": delay,
+                "from": line.get("stations_by_id", {}).get(
+                    (t.get("odpt:fromStation") or "").rsplit(".", 1)[-1]
+                ),
+                "cars": t.get("odpt:carComposition"),
+            }
+            if t.get("_station"):
+                entry["from"] = t["_station"]
+            if t.get("_or_more"):
+                # JR-Kyushu "+N分以上": the value is a floor, not exact
+                entry["delay_or_more"] = True
+            stations = None
+            sched = t.get("_sched")
+            if sched and not sched.get("_stale"):
+                stations = sched["stops"]
+                entry["scheduled"] = {k: v for k, v in sched.items() if not k.startswith("_")}
+            else:
+                railways_hint = t.get("_railways")
+                for rid in railways_hint or []:
+                    store.railway_legs(rid)
+                leg = store.find_leg(
+                    railway,
+                    t.get("odpt:trainNumber"),
+                    op=op,
+                    railways=railways_hint,
+                    number_prefix=t.get("_number_prefix"),
+                )
+                if leg:
+                    stations = [s["station"] for s in leg["stops"]]
+                    entry["scheduled"] = {
+                        "dep": leg["dep"],
+                        "arr": leg["arr"],
+                        "origin": stations[0],
+                        "destination": stations[-1],
+                        "stops": stations,
+                    }
+            if stations:
+                cands = suki_index.match(stations, suki_line, railway=railway)
+                if cands:
+                    entry["suki"] = cands
+            board.append(entry)
+        op_stats[op] = {"fetched_at": payload.get("fetchedAt"), "trains": len(body), "delayed": delayed}
+
+    board.sort(key=lambda e: (-e["delay_s"], e["railway"], e["number"] or ""))
+    by_key = {}
+    for e in board:
+        for c in e.get("suki", []):
+            # strong matches only for the flat lookup table: exact ordered
+            # containment, or off by at most one stop (stopping-pattern drift
+            # between the datasets); looser candidates stay on the train
+            if not (c["subseq"] or c.get("fuzzy", 99) <= 1):
+                continue
+            slot = by_key.setdefault(
+                c["key"],
+                {
+                    "key": c["key"],
+                    "delay_min": e["delay_min"],
+                    "train": e["number"],
+                    "line": e["line"],
+                    "type": e["type"],
+                    "dep": e.get("scheduled", {}).get("dep"),
+                    "score": c["overlap"],
+                    "fuzzy": 0 if c["subseq"] else c.get("fuzzy"),
+                    "ambiguous": False,
+                    "alternatives": [],
+                },
+            )
+            if slot["train"] != e["number"]:
+                slot["ambiguous"] = True
+                slot["alternatives"].append({"train": e["number"], "line": e["line"], "delay_min": e["delay_min"]})
+    return {
+        "version": 1,
+        "generated_at": now.isoformat(),
+        "date": now.date().isoformat(),
+        "delayed_count": len(board),
+        "matched_suki_count": len(by_key),
+        "operators": op_stats,
+        "trains": board,
+        "by_suki_key": by_key,
+    }
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data-dir", default="data")
+    ap.add_argument("--offline", default=None)
+    args = ap.parse_args()
+    payload = bake(common.Source(args.offline), args.data_dir)
+    out = Path(args.data_dir) / "delays.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    with_legs = sum(1 for t in payload["trains"] if t.get("scheduled"))
+    with_suki = sum(1 for t in payload["trains"] if t.get("suki"))
+    print(
+        f"delays: {payload['delayed_count']} delayed, "
+        f"{with_legs} with dokorail leg, {with_suki} mapped to suki keys "
+        f"({payload['matched_suki_count']} unique keys) -> {out}"
+    )
+
+
+if __name__ == "__main__":
+    main()
