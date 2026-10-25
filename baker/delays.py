@@ -165,12 +165,14 @@ class LegStore:
         order += ["Weekday", "SaturdayHoliday", "Holiday", "Saturday", "Dated"]
         return [c for c in dict.fromkeys(order) if c in avail]
 
-    def find_leg(self, railway, number, op=None, railways=None, number_prefix=None):
+    def find_leg(self, railway, number, op=None, railways=None, number_prefix=None, number_digits=None):
         """Best leg for a feed train, operator-scoped. `railways` lists the
         dokorail railways to search (self-contained operators like JR-Kyushu
         know their routes); with `number_prefix`, legs match by number
-        prefix (feed gives bare "3222", bundles carry "3222M"). Ties prefer
-        the leg whose window brackets now, then the shortest suffix."""
+        prefix (feed gives bare "3222", bundles carry "3222M"); with
+        `number_digits`, legs match on digit-equality ignoring the depot
+        letter (JR-West guide "2724H" == dokorail "2724M"). Ties prefer the
+        leg whose window brackets now, then the shortest suffix."""
         if railways:
             pools = [self.railway_legs(r) for r in railways]
         elif railway:
@@ -188,10 +190,22 @@ class LegStore:
         else:
             pools = []
         base = number_prefix or number or ""
-        if not base:
+        if not base and not number_digits:
             return None  # no number to match on; caller falls back to position matching
 
+        def leg_digits(leg_number):
+            core = leg_number.split(".", 1)[0]  # drop through-leg suffix
+            return "".join(ch for ch in core if ch.isdigit())
+
         def match_pool(pool):
+            if number_digits:
+                cands = [l for l in pool if leg_digits(l["number"]) == number_digits]
+                if cands:
+                    # prefer a bundle number whose depot letter matches, then
+                    # the closest time window
+                    cands.sort(key=lambda l: (l["number"] != base, len(l["number"])))
+                    return self._closest(cands)
+                return None
             exact = [l for l in pool if l["number"] == base]
             if exact:
                 return self._closest(exact)
@@ -331,11 +345,16 @@ def bake(source, data_dir):
                 if not railways_hint and t.get("_line_ja"):
                     # line-name-only sources (doko-train, JR-Central): resolve
                     # the title to dokorail railways, scoped to the operator -
-                    # 東海道本線 exists at three JRs, numbers can collide
-                    railways_hint = [
-                        r for r in titles.get(t["_line_ja"], [])
-                        if r.startswith(op + ".")
-                    ]
+                    # 東海道本線 exists at three JRs, numbers can collide.
+                    # Composite names (白新線・羽越本線) match each part.
+                    raw_title = t["_line_ja"]
+                    parts = [raw_title] + raw_title.split("・")
+                    railways_hint = []
+                    for part in parts:
+                        railways_hint += [
+                            r for r in titles.get(part, [])
+                            if r.startswith(op + ".") and r not in railways_hint
+                        ]
                 for rid in railways_hint or []:
                     store.railway_legs(rid)
                 leg = store.find_leg(
@@ -344,6 +363,7 @@ def bake(source, data_dir):
                     op=op,
                     railways=railways_hint,
                     number_prefix=t.get("_number_prefix"),
+                    number_digits=t.get("_number_digits"),
                 )
                 match_method = "number" if leg else None
                 pos_gap = None

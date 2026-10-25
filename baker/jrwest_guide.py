@@ -21,6 +21,7 @@ and jr.suki.ing; delays.py's operator-scoped title bridge resolves the
 timetable bundles from there.
 """
 
+import re
 import time
 
 from . import common
@@ -128,6 +129,10 @@ def fetch(src=None):
                 "odpt:delay": delay_min * 60,
                 "odpt:trainType": t.get("displayType") or None,
                 "_number_prefix": number,
+                # JR-West guide numbers carry a depot letter (2724H) while
+                # dokorail bundles use a different depot's letter (2724M)
+                # for the same train - match on the digits only
+                "_number_digits": re.sub(r"\D", "", number) or None,
                 "_line_ja": line_name,
                 "_suki_line": line_name,
                 "_station": station_names.get(at),
