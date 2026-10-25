@@ -182,6 +182,17 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
     WebView 域名未公开、深夜 DNS/404 探测无效（traininfo.seiburailway.jp
     连接超时），需白天用浏览器从各家 app 官网入口逐个抓 WebView URL。
     相互連携成员参考：東急 2019/3/25 新闻稿（10 社互连）、西武 2020/7。
+  - **山陽電鉄**（suki 85 班）— 官方 app 的走行位置是「阪神アプリとの連携」
+    （https://www.sanyo-railway.co.jp/railway/app.html）——即阪神 app 的
+    数据源里应该含山陽直通列车。阪神 schema（ikisaki_*.json）已捕获，
+    白天验证填充态时确认是否含山陽车，含则阪神接入时一并解决。
+  - **東京メトロ**（suki 有楽町線 144/東西線 44/南北線 77）— 官方 app 数据
+    每 4 秒更新，走 ODPT 的 challenge 端点（api.tokyometroapp.jp，需免费
+    注册 token；Qiita 有解析文章 mima_ita/ac8efe441b6c7f2165e2）。拿到
+    token 后在 odpt.py 里加 TokyoMetro 即可（ODPT 标准格式）。
+  - **西鉄**（suki 太宰府線 4）— 官网 train/location/ 404，数据在 app 里；
+    神戸市営/名古屋市営/札幌市営地下鉄官网主机深夜全部连接失败（地区限制
+    或反爬），需白天验证。
 - 晚点语义：`odpt:delay` 秒、按分钟量化、JR-West 封顶 3660s（显示 +61），
   字段缺失 = 未知（当准点显示），阈值 ≥60s。
 - baker 的 commit 会保住仓库活跃度，scheduled workflow 不会被 60 天规则停用。
