@@ -198,8 +198,12 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
     token 后在 odpt.py 里加 TokyoMetro 即可（ODPT 标准格式）。
   - **西鉄**（suki 太宰府線 4）— 官网 train/location/ 404，数据在 app 里；
   - **第二批侦察（2026-10-26 深夜，源自 174.diary.to 走行位置まとめ）**：
-    - **青い森鉄道**（suki 28 班）— `aoimoriunkou.xsrv.jp`，服务端渲染的单页
-      HTML/SVG（inline 变量含 delay_be/delay_af），HTML 解析器即可，全线公开；
+    - **青い森鉄道** — `aoimoriunkou.xsrv.jp`，服务端渲染的单页
+      HTML/SVG（`aoi_jp.svg`，列车 path 元素内嵌
+      id=车号/text1=行先/text2=種別▲▼/text3=位置区间/text4=晚点分钟，
+      2026-10-26 实测 3 班晚点，解析极易）。**但 suki 侧经复核为 0 班**
+      （此前的"28 班"为误记）——主站没有该线班次，接入无映射价值，
+      按「suki 覆盖优先」原则搁置；主站未来若补该线则 30 分钟可接入。
     - **近鉄 PC 版**（suki 近鉄名古屋線 91）— `tid.kintetsu.co.jp/LocationWeb/
       index.html`，**服务端渲染**（车次 1860/1830/1777… 内嵌，结构同名鉄），
       HTML 解析器方案——比 navitime 的线级端点更进一步，能拿到 per-train；
