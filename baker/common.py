@@ -192,6 +192,13 @@ class Source:
 
         return jrcentral.fetch(self)
 
+    def jr_west_guide_feed(self):
+        """JR-West official train-guide JSON (baker/jrwest_guide.py).
+        Offline mode replays the captured area/position/station fixtures."""
+        from . import jrwest_guide
+
+        return jrwest_guide.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))

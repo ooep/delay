@@ -173,6 +173,9 @@ class LegStore:
 def bake(source, data_dir):
     lines = json.loads((Path(data_dir) / "lines.json").read_text())
     realtime_ops = sorted(lines["realtime_operators"])
+    # JR-West now comes from its own train-guide API (baker/jrwest_guide.py):
+    # dokorail's JR-West feed 403s GitHub runner IPs via Cloudflare
+    realtime_ops = [op for op in realtime_ops if op != "JR-West"]
     try:
         index = source.timetable_index()["railways"]
     except Exception as exc:  # noqa: BLE001 - flaky CDN: degrade to no-legs
@@ -194,6 +197,7 @@ def bake(source, data_dir):
     feeds.append(("JR-East", source.jr_east_dokotrain_feed()))
     feeds.append(("Nankai", source.nankai_feed()))
     feeds.append(("JR-Central", source.jr_central_feed()))
+    feeds.append(("JR-West", source.jr_west_guide_feed()))
     for op, payload in feeds:
         if not payload or not payload.get("ok"):
             op_stats[op] = {"feed": "unavailable"}

@@ -82,8 +82,9 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
 - GitHub cron 有 5–20 分钟抖动，`generated_at` 在文件里，UI 建议展示数据年龄。
   若要真·实时：在 dokorail 的 `/api/feeds` 加一行 suki.ing 的 ACAO，前端直连，
   本烘焙留作静态兜底。
-- feed 目前放行 JR-West / Keikyu / Tobu / Toei / YokohamaMunicipal；JR-East
+- feed 目前放行 Keikyu / Tobu / Toei / YokohamaMunicipal；JR-East、JR-West
   现在答 403，烘焙器逐运营商容错——dokorail 一放开它自动进板。
+  JR-West 已改走官方 train-guide（见下），dokorail 的 JR-West 喂送停用。
 - **JR-Shikoku（四国）走独立源**：`baker/jrshikoku.py` 直接拉四国自己的走行位置
   服务 `train.jr-shikoku.co.jp/data/train/train.json`（端点与字段
   `Line/TrainNum/Type/Direction/delay/Pos` 系从其混淆前端 traindisp_ob.js 逆向），
@@ -133,6 +134,16 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
   排序候选并回退，修掉了"周末永远匹配不到南海时刻表"的隐性 bug。
   局限：dokorail 的南海时刻表是 service-build 自建、覆盖不全（如周日深夜的
   6920 不在其中），这类班次上板但不进 by_suki_key。
+- **JR-West（JR西日本）改走官方 train-guide API**：`baker/jrwest_guide.py` 直连
+  `www.train-guide.westjr.co.jp/api/v3/`（`area_<地区>_master.json` 五地区线表
+  近畿/北陸/岡山/広島/山陰 + `<slug>.json` 每线班次 + `<slug>_st.json` 站名，
+  无 key、CloudFront 前置）。字段：`no`(裸车号 1303)/`pos`(`A_B` 区间、停靠时
+  `A_####`)/`delayMinutes`/`displayType`。45 条线的营销名（JR京都線、大和路線、
+  JR神戸線・山陽線…）经 LINE_NAME_REWRITES 对回本線名，再走通用 title 桥
+  （运营商作用域）配 dokorail 腿；车号前缀匹配覆盖 dokorail 的后缀/区間休变体
+  （1303M、1303~1）。**替代了 dokorail 的 JR-West 喂送**（其 Cloudflare 403
+  拦 runner），JR-West 从此不依赖 dokorail 可用性。请求串行 + 0.05s 间隔
+  （每轮约 50 个文件，覆盖 45 线）。
 - 私铁侦察备忘（2026-10-26 夜间侦察）：
   - **阪神** — schema 已完整捕获：`apl.hanshin.co.jp/5/data/ikisaki_<行先>.json`
     （`forinf[].trninf[]`: no/typ/pos/stp/**dly**/dlyflg 槽位制）+ masters
