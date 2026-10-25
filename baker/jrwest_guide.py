@@ -96,6 +96,10 @@ def fetch(src=None):
             number = str(t.get("no") or "").strip()
             if not number:
                 continue
+            # a through train crossing a line boundary appears under both
+            # slugs - keep one record per train number
+            if any(p[1] == number for p in pending):
+                continue
             slug_names.setdefault(slug, slug)
             pending.append((slug, number, delay_min, t))
             delayed_slugs.add(slug)
