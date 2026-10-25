@@ -31,6 +31,14 @@ LINE_NAME_REWRITES = {
     "紀勢線": "紀勢本線",
 }
 
+# Tokaido Shinkansen (ti08): positions live in a var/ file polled every
+# 2.5s by the page, withdrawn after the last train (~01:45 JST). Confirmed
+# via browser XHR: trainLocationInfo.{atStation,betweenStation}.bounds.{1|2}
+# -> station slots with trains[] = {trainNumber, train: <kind code>,
+# delay: <minutes>}. Kind codes / station indices resolve via common_ja.json.
+SHINKANSEN_LOC_URL = BASE + "/shinkansen/var/train_info/train_location_info.json"
+SHINKANSEN_COMMON_URL = BASE + "/shinkansen/common/data/common_ja.json"
+
 
 def _multi_lang(entries, lang="ja"):
     for e in entries or []:
@@ -39,7 +47,96 @@ def _multi_lang(entries, lang="ja"):
     return ""
 
 
+def _offline_json(src, name):
+    try:
+        return src.offline_json(name)
+    except Exception:
+        return None
+
+
+def fetch_shinkansen(src):
+    """Tokaido Shinkansen delayed trains. Empty list outside service hours
+    (the var/ file 302s once withdrawn) or when everyone is on time."""
+    if src.offline:
+        d = _offline_json(src, "jc-sk-loc-day.json")
+        common_data = _offline_json(src, "jc-sk-common.json")
+    else:
+        try:
+            d = common.get_json(
+                SHINKANSEN_LOC_URL + f"?timestamp={int(common.time.time() * 1000)}",
+                headers={"Referer": BASE + "/shinkansen/sp/ja/ti08.html"},
+            )
+            common_data = common.get_json(SHINKANSEN_COMMON_URL)
+        except Exception as exc:
+            print(f"jrcentral shinkansen: {type(exc).__name__}: {str(exc)[:120]}")
+            return []
+    if not isinstance(d, dict) or not isinstance(d.get("trainLocationInfo"), dict):
+        return []
+    tl = d["trainLocationInfo"]
+    const = (common_data or {}).get("constant") or {}
+    kind_names = const.get("train") or {}
+    station_names = const.get("station") or {}
+
+    body = []
+    seen = set()
+    for section in ("atStation", "betweenStation"):
+        bounds = (tl.get(section) or {}).get("bounds") or {}
+        for bound, slots in bounds.items():
+            for slot in slots or []:
+                station_code = str(slot.get("station") or "")
+                station = station_names.get(station_code)
+                # one map covers three lines: 東京..新大阪 / 新神戸..博多 /
+                # 新鳥栖..鹿児島中央 (indices from common_ja station map)
+                try:
+                    idx = int(station_code)
+                except ValueError:
+                    idx = 0
+                line_name = "九州新幹線" if idx >= 46 else ("山陽新幹線" if idx >= 16 else "東海道新幹線")
+                railways = {
+                    "東海道新幹線": ["JR-Central.TokaidoShinkansen"],
+                    "山陽新幹線": ["JR-West.SanyoShinkansen", "JR-Central.TokaidoShinkansen"],
+                    "九州新幹線": ["JR-Kyushu.KyushuShinkansen"],
+                }.get(line_name, [])
+                for tr in slot.get("trains") or []:
+                    number = str(tr.get("trainNumber") or "").strip()
+                    delay_min = int(tr.get("delay") or 0)
+                    if not number or delay_min < DELAY_THRESHOLD_MIN:
+                        continue
+                    if number in seen:
+                        continue
+                    seen.add(number)
+                    body.append(
+                        {
+                            "owl:sameAs": f"JR-Central-Shinkansen:{number}",
+                            "odpt:railway": f"odpt.Railway:{railways[0] if railways else 'JR-Central'}",
+                            "odpt:trainNumber": number,
+                            "odpt:delay": delay_min * 60,
+                            "odpt:trainType": kind_names.get(str(tr.get("train"))) or None,
+                            "_line_ja": line_name,
+                            "_suki_line": line_name,
+                            "_railways": railways,
+                            "_number_prefix": number,
+                            "_station": station,
+                        }
+                    )
+    return body
+
+
 def fetch(src=None):
+    src = src or common.Source()
+    zairaisen = _fetch_zairaisen(src)
+    if zairaisen is None:
+        return None
+    # Tokaido Shinkansen rides in the same operator: service-hours only
+    # (the var/ file is withdrawn after the last train), failures tolerated
+    try:
+        zairaisen["body"].extend(fetch_shinkansen(src))
+    except Exception as exc:
+        print(f"jrcentral shinkansen merge: {type(exc).__name__}: {str(exc)[:120]}")
+    return zairaisen
+
+
+def _fetch_zairaisen(src):
     src = src or common.Source()
     if src.offline:
         try:
