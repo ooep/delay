@@ -187,6 +187,13 @@ class Source:
 
         return nankai.fetch(self)
 
+    def nishitetsu_feed(self):
+        """Nishitetsu NNR position JSON (baker/nishitetsu.py). Offline mode
+        replays the captured tenjin-omuta/stopStation fixtures."""
+        from . import nishitetsu
+
+        return nishitetsu.fetch(self)
+
     def jr_central_feed(self):
         """JR-Central zairaisen JSON (baker/jrcentral.py). Offline mode
         replays the captured zaisenichi fixture."""

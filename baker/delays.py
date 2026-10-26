@@ -648,6 +648,7 @@ def bake(source, data_dir):
         ("JR-Kyushu", source.jr_kyushu_feed),
         ("JR-East", source.jr_east_dokotrain_feed),
         ("Nankai", source.nankai_feed),
+        ("Nishitetsu", source.nishitetsu_feed),
         ("JR-Central", source.jr_central_feed),
         ("Keihan", source.keihan_feed),
         ("Hanshin", source.hanshin_feed),
