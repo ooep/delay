@@ -9,15 +9,111 @@ is a flat lookup table so jr.suki.ing tags its trains with zero join logic.
 """
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
+import threading
 from pathlib import Path
 
 from . import common, suki, suki_timetable
 
 DELAY_THRESHOLD_SECONDS = 60
 MAX_CANDIDATES = 3
+# Parallel feed fetch: sources are independent websites, so we fetch them
+# concurrently (the previous serial walk took ~4 min, dominated by network
+# waits). Each feed's internal request order stays untouched - JR-Kyushu's
+# WAF throttling, doko-train's line scans etc. remain serial inside the feed.
+FEED_FETCH_WORKERS = 12
+# suki-direct 时刻消歧：报告站过站时刻与 (now - delay) 的容差（分钟）。
+# 新干线等无 dokorail 时刻表的线路，用 suki 时刻表把多候选收敛为唯一班次；
+# 收敛必须严格（窗口内唯一趟 + 唯一 key + 车种特征吻合），否则宁漏不误报。
+DIRECT_TIME_TOLERANCE_MIN = 3
+
+
+def _type_compatible(stops_norm, train_type):
+    """车种特征强校验:候选 key 的停站序列必须符合该车种的实际停站模式,
+    防止 さくら 被误标到 のぞみ 模式等混乱。suki 时刻表按 停站序列 分车种:
+    鹿児島中央 只有 さくら/みずほ 直通;こだま 站多;のぞみ 不到鹿児島中央。"""
+    if not train_type:
+        return True
+    n = len(stops_norm)
+    has_kago = "鹿児島中央" in stops_norm
+    if train_type in ("さくら", "みずほ"):
+        return has_kago
+    if train_type == "のぞみ":
+        return not has_kago and n <= 11
+    if train_type == "こだま":
+        return n >= 12
+    if train_type == "ひかり":
+        return not has_kago and 10 <= n <= 13
+    return True
+
+
+def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min, train_type=None, tol=DIRECT_TIME_TOLERANCE_MIN):
+    """严格强匹配:把 suki-direct 多候选按『报告站过站时刻 ≈ now - delay』
+    收敛。三条硬约束(参考在来線 find_leg 的匹配语义,宁漏不误报):
+    ① 候选 key 的站序须符合车种特征(_type_compatible);
+    ② 该 key 在容差窗口内必须只有一趟(同 key 多趟 → 无法确定具体班次 → 弃);
+    ③ 全局唯一:与次优 key 的 gap 差 ≤ 2 → 模式歧义 → 弃。
+    返回 {"cand": 单候选, "scheduled": {dep, origin, stops}} 或 None。"""
+    est = now.hour * 60 + now.minute - (delay_min or 0)
+    want = suki.norm_station(station)
+    scored = []
+    for c in cands:
+        key = str(c["key"])
+        stops_n = suki_index._stops_norm[key]
+        if want not in stops_n:
+            continue
+        if not _type_compatible(stops_n, train_type):
+            continue
+        pas = stt.passage_times(key, stops_n, want)
+        if not pas:
+            continue
+        near = [p for p in pas if abs(p[0] - est) <= tol]
+        if len(near) != 1:
+            continue
+        arrive, dep0 = near[0]
+        scored.append((abs(arrive - est), c, key, arrive, dep0))
+    if not scored:
+        return None
+    scored.sort(key=lambda x: x[0])
+    if len(scored) >= 2 and scored[1][0] - scored[0][0] <= 2:
+        return None
+    gap, cand, key, arrive, dep0 = scored[0]
+    if gap > tol:
+        return None
+    stops = suki_index.trains[key]["s_jas"]
+    c2 = dict(cand)
+    c2["size"] = len(stops)
+    scheduled = {
+        "dep": f"{dep0 // 60:02d}:{dep0 % 60:02d}",
+        "origin": stops[0],
+        "stops": stops,
+    }
+    return {"cand": c2, "scheduled": scheduled}
+
+
+def _safe_feed(name, thunk):
+    """Run one feed defensively: any unexpected provider change (format
+    drift, 5xx, schema swap) must cost that operator's data, not the whole
+    bake run. Mirrors train_feed's per-operator fault tolerance for every
+    self-contained source."""
+    try:
+        return thunk()
+    except Exception as exc:  # noqa: BLE001 - survive any provider surprise
+        print(f"feed {name}: {type(exc).__name__}: {str(exc)[:160]}")
+        return None
+
+
+def _fetch_feeds(feed_jobs, workers=FEED_FETCH_WORKERS):
+    """(name, thunk) jobs -> [(name, payload)] fetched concurrently."""
+    feeds = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+        future = {ex.submit(_safe_feed, n, t): n for n, t in feed_jobs}
+        for f in concurrent.futures.as_completed(future):
+            feeds.append((future[f], f.result()))
+    return feeds
 
 
 def hhmm_to_min(s):
@@ -100,40 +196,79 @@ class LegStore:
         self.cal_cache = {}
         self.primary_cal = {}
 
+    def _legs_from_blocks(self, railway, blocks):
+        line = self.lines.get(railway)
+        names = line["stations"] if line else []
+        legs = []
+        for block in blocks:
+            if block[2] != railway:
+                continue
+            for number, stops, meta in block[5]:
+                dates = meta.get("dates")
+                if dates and self.today not in common.dated_runs(dates[1], dates[0]):
+                    continue
+                decoded = common.decode_stops(stops, names)
+                legs.append(
+                    {
+                        "railway": railway,
+                        "number": number,
+                        "type": meta.get("type"),
+                        "names": [n["ja"] for n in meta.get("names") or []],
+                        "stops": decoded,
+                        "dep": decoded[0]["dep"],
+                        "arr": decoded[-1].get("arr") or decoded[-1]["dep"],
+                    }
+                )
+        return legs
+
     def railway_legs_cal(self, railway, cal):
         """Legs from one specific calendar (cached per railway+calendar)."""
         key = (railway, cal)
         if key in self.cal_cache:
             return self.cal_cache[key]
         entry = self.index.get(railway)
-        line = self.lines.get(railway)
         legs = []
-        if entry and line and entry.get("bundle"):
-            names = line["stations"]
+        if entry and entry.get("bundle"):
             asset = entry["bundle"]["calendars"].get(cal)
             if asset:
-                for block in common.bundle_blocks(self.source.bundle(asset["url"]) or []):
-                    if block[2] != railway:
-                        continue
-                    for number, stops, meta in block[5]:
-                        dates = meta.get("dates")
-                        if dates and self.today not in common.dated_runs(dates[1], dates[0]):
-                            continue
-                        decoded = common.decode_stops(stops, names)
-                        legs.append(
-                            {
-                                "railway": railway,
-                                "number": number,
-                                "type": meta.get("type"),
-                                "names": [n["ja"] for n in meta.get("names") or []],
-                                "stops": decoded,
-                                "dep": decoded[0]["dep"],
-                                "arr": decoded[-1].get("arr") or decoded[-1]["dep"],
-                                "calendar": cal,
-                            }
-                        )
+                legs = self._legs_from_blocks(
+                    railway, common.bundle_blocks(self.source.bundle(asset["url"]) or [])
+                )
         self.cal_cache[key] = legs
         return legs
+
+    def prefetch(self, railways, workers=8):
+        """Eagerly download timetable bundles for every candidate railway so
+        the sequential board walk (find_leg / railway_legs) hits the cache
+        instead of doing dozens of serial network fetches - the old run's
+        dominant cost (~4 min on GitHub runners, 9 min from slower hosts)."""
+        jobs = []
+        for rid in railways:
+            entry = self.index.get(rid)
+            if not entry or not entry.get("bundle"):
+                continue
+            for cal in self.calendar_candidates(entry, self.weekday, self.today):
+                if (rid, cal) in self.cal_cache:
+                    continue
+                asset = entry["bundle"]["calendars"].get(cal)
+                if asset:
+                    jobs.append((rid, cal, asset["url"]))
+        if not jobs:
+            return
+
+        def _load(item):
+            rid, cal, url = item
+            try:
+                blocks = common.bundle_blocks(self.source.bundle(url) or [])
+                return rid, cal, blocks
+            except Exception as exc:  # noqa: BLE001 - one bundle must not abort
+                print(f"prefetch {rid}/{cal}: {type(exc).__name__}: {str(exc)[:100]}")
+                return rid, cal, None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+            for rid, cal, blocks in ex.map(_load, jobs):
+                if blocks is not None:
+                    self.cal_cache[(rid, cal)] = self._legs_from_blocks(rid, blocks)
 
     def railway_legs(self, railway):
         """Primary calendar legs (first candidate that has this railway's
@@ -344,14 +479,22 @@ def bake(source, data_dir):
         op for op in realtime_ops
         if op not in {"JR-West", "Toei", "Keikyu", "Tobu", "YokohamaMunicipal"}
     ]
-    try:
-        index = source.timetable_index()["railways"]
-    except Exception as exc:  # noqa: BLE001 - flaky CDN: degrade to no-legs
-        print(f"timetable index unavailable ({exc}); baking without legs")
-        index = {}
+    # The timetable index is a large JSON (~0.5 MB) that used to stall the
+    # whole run for minutes on flaky networks; it is independent of the live
+    # feeds, so download it concurrently instead of serially in front of them.
+    _index_box = {}
+
+    def _load_index():
+        try:
+            _index_box["v"] = source.timetable_index()["railways"]
+        except Exception as exc:  # noqa: BLE001 - flaky CDN: degrade to no-legs
+            print(f"timetable index unavailable ({exc}); baking without legs")
+            _index_box["v"] = {}
+
+    _index_thread = threading.Thread(target=_load_index, daemon=True)
+    _index_thread.start()
     titles = title_index(lines["lines"])
     now = common.jst_now()
-    store = LegStore(source, index, lines["lines"], now.date().isoformat(), now.weekday(), now.hour * 60 + now.minute)
     suki_index = suki.SukiIndex.load(data_dir)
     # the site's own timetable turns station-sequence candidates into
     # time-verified unique mappings (T.t = tmaps key, T.s[0] = dep minute)
@@ -361,22 +504,27 @@ def bake(source, data_dir):
 
     board = []
     op_stats = {}
-    feeds = [(op, source.train_feed(op)) for op in realtime_ops]
+    # Feed jobs run concurrently (each hits a different site); per-operator
+    # fault tolerance is enforced by _safe_feed on top of each source's own
+    # internal try/except, so a provider format change costs one feed at most.
+    feed_jobs = [(op, lambda op=op: source.train_feed(op)) for op in realtime_ops]
     # Operators with their own position services (suspended/403 -> None and
     # silently skipped, auto-join on recovery):
-    feeds.append(("JR-Shikoku", source.jr_shikoku_feed()))
-    feeds.append(("JR-Hokkaido", source.jr_hokkaido_feed()))
-    feeds.append(("JR-Kyushu", source.jr_kyushu_feed()))
-    feeds.append(("JR-East", source.jr_east_dokotrain_feed()))
-    feeds.append(("Nankai", source.nankai_feed()))
-    feeds.append(("JR-Central", source.jr_central_feed()))
-    feeds.append(("Keihan", source.keihan_feed()))
-    feeds.append(("Hanshin", source.hanshin_feed()))
-    feeds.append(("Kintetsu", source.kintetsu_feed()))
-    feeds.append(("JR-West", source.jr_west_guide_feed()))
-    # ODPT operators (Toei keyless; Tobu/YokohamaMunicipal keyed). Keikyu has
-    # its own keyless web API (baker/keikyu.py)
-    feeds.append(("Keikyu", source.keikyu_feed()))
+    feed_jobs += [
+        ("JR-Shikoku", source.jr_shikoku_feed),
+        ("JR-Hokkaido", source.jr_hokkaido_feed),
+        ("JR-Kyushu", source.jr_kyushu_feed),
+        ("JR-East", source.jr_east_dokotrain_feed),
+        ("Nankai", source.nankai_feed),
+        ("JR-Central", source.jr_central_feed),
+        ("Keihan", source.keihan_feed),
+        ("Hanshin", source.hanshin_feed),
+        ("Kintetsu", source.kintetsu_feed),
+        ("JR-West", source.jr_west_guide_feed),
+        # ODPT operators (Toei keyless; Tobu/YokohamaMunicipal keyed). Keikyu has
+        # its own keyless web API (baker/keikyu.py)
+        ("Keikyu", source.keikyu_feed),
+    ]
     _odpt_ops = ["Toei", "Tobu", "YokohamaMunicipal"]
     if os.environ.get("ODPT_KEY", "").strip():
         # with a consumer key the keyed API covers the rest of the 東京圏
@@ -387,8 +535,29 @@ def bake(source, data_dir):
             "SaitamaTransit", "TWR", "TokyoMonorail", "Rinkai",
             "Yurikamome", "Minatomirai", "Shibayama", "ToyoRapid",
         ]
-    for _odpt_op in _odpt_ops:
-        feeds.append((_odpt_op, source.odpt_feed(_odpt_op)))
+    feed_jobs += [(_op, lambda op=_op: source.odpt_feed(op)) for _op in _odpt_ops]
+    feeds = _fetch_feeds(feed_jobs)
+    # join the concurrent index download; either way we proceed (degraded to
+    # no-legs when the CDN refused it)
+    _index_thread.join()
+    index = _index_box.get("v", {})
+    store = LegStore(source, index, lines["lines"], now.date().isoformat(), now.weekday(), now.hour * 60 + now.minute)
+    # Prewarm: collect every railway that may need timetable legs and download
+    # the bundles in parallel, so the sequential board walk below hits the
+    # LegStore cache instead of serial network fetches (the run's old cost).
+    cand_rails = set()
+    for _op, _payload in feeds:
+        if not _payload or not _payload.get("ok"):
+            continue
+        for _t in _payload.get("body") or []:
+            if not isinstance(_t, dict):
+                continue
+            _rw = (_t.get("odpt:railway") or "").replace("odpt.Railway:", "").replace("odpt:Railway:", "")
+            if _rw:
+                cand_rails.add(_rw)
+            for _part in (_t.get("_line_ja") or "").split("・"):
+                cand_rails.update(titles.get(_part, []))
+    store.prefetch(cand_rails)
     for op, payload in feeds:
         if not payload or not payload.get("ok"):
             op_stats[op] = {"feed": "unavailable"}
@@ -397,8 +566,13 @@ def bake(source, data_dir):
         body = payload.get("body") or []
         delayed = 0
         for t in body:
+            if not isinstance(t, dict):
+                continue
             delay = t.get("odpt:delay")
-            if delay is None or delay < DELAY_THRESHOLD_SECONDS:
+            # providers occasionally swap numeric delay for a text field
+            # (Keihan's delayMinutes became "6分遅れ"); one bad record must
+            # not abort the whole run
+            if not isinstance(delay, (int, float)) or delay is None or delay < DELAY_THRESHOLD_SECONDS:
                 continue
             delayed += 1
             railway = (t.get("odpt:railway") or "").replace("odpt.Railway:", "").replace("odpt:Railway:", "")
@@ -504,11 +678,24 @@ def bake(source, data_dir):
                             direction = "down" if int(num) % 2 else "up"
                         direct = suki_index.match_direct(
                             t["_line_ja"], t["_station"], direction,
-                            entry.get("type"),
+                            entry.get("type"), top=32,
                         )
                         if direct:
                             entry["suki"] = direct
                             entry["match"] = "suki-direct"
+                            # 时刻消歧：无 dokorail 时刻表的线路（新干线等）
+                            # 用 suki 时刻表把多候选收敛为唯一班次并补
+                            # scheduled（主站打标需要 dep/origin/stops）；
+                            # 消歧不出 → 保持多候选，by_key 只信单候选 → 不映射
+                            if stt and len(direct) > 1:
+                                resolved = resolve_direct_by_time(
+                                    stt, suki_index, direct,
+                                    t["_station"], now, round(delay / 60),
+                                    entry.get("type"),
+                                )
+                                if resolved:
+                                    entry["suki"] = [resolved["cand"]]
+                                    entry["scheduled"] = resolved["scheduled"]
                 if leg:
                     stations = [s["station"] for s in leg["stops"]]
                     entry["railway"] = leg["railway"]

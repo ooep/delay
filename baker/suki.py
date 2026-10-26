@@ -182,12 +182,14 @@ class SukiIndex:
     }
 
     # stopping-pattern size buckets by service type (approximate but
-    # separates こだま from のぞみ cleanly)
+    # separates こだま from のぞみ cleanly; 車種 key-station 校验在
+    # resolve_direct_by_time 里做, bucket 只做第一道粗筛)
     TYPE_STOP_BUCKETS = {
-        "のぞみ": (0, 10),
+        "のぞみ": (0, 11),   # 全程(東京→博多)11 站;2026-10 实测 8068=11 站
+        "ひかり": (10, 13),
         "こだま": (12, 99),
         "みずほ": (0, 8),
-        "さくら": (0, 10),
+        "さくら": (0, 13),   # 全程(東京→鹿児島中央)13 站
     }
 
     def match_direct(self, line_title, station, direction=None, train_type=None, top=3):
@@ -201,16 +203,18 @@ class SukiIndex:
             return []
         want = self._expand(line_names_for(line_title))
         target = norm_station(station)
-        north = self.NORTH_TERMINALS.get(line_title, set())
+        # 跨线全程车(東京→博多 のぞみ 等)始发站可能是任一北端(東京/新大阪/博多),
+        # 方向判断用全线北端并集,不能用本线路北端(否则漏掉跨线下行车)
+        north = set().union(*self.NORTH_TERMINALS.values())
         lo, hi = self.TYPE_STOP_BUCKETS.get(train_type or "", (0, 99))
         scored = []
         for k in {kk for line in want for kk in self._line_pool.get(line, [])}:
             hay = self._stops_norm[k]
             if target not in hay:
                 continue
-            if direction == "down" and north and hay[0] not in north:
+            if direction == "down" and hay[0] not in north:
                 continue
-            if direction == "up" and north and hay[-1] not in north:
+            if direction == "up" and hay[-1] not in north:
                 continue
             if not (lo <= len(hay) <= hi):
                 continue

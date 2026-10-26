@@ -21,6 +21,7 @@ and jr.suki.ing; delays.py's operator-scoped title bridge resolves the
 timetable bundles from there.
 """
 
+import concurrent.futures
 import re
 import time
 
@@ -83,35 +84,38 @@ def fetch(src=None):
     delayed_slugs = set()
     pending = []
     stamps = []
-    for slug in slug_names:
-        d = _get(src, f"{slug}.json", f"wg-trains-{slug}.json")
-        if d and d.get("update"):
-            stamps.append(str(d["update"]))
-        for t in (d or {}).get("trains") or []:
-            if not isinstance(t, dict):
-                continue
-            delay_min = int(t.get("delayMinutes") or 0)
-            if delay_min < DELAY_THRESHOLD_MIN:
-                continue
-            number = str(t.get("no") or "").strip()
-            if not number:
-                continue
-            # a through train crossing a line boundary appears under both
-            # slugs - keep one record per train number
-            if any(p[1] == number for p in pending):
-                continue
-            slug_names.setdefault(slug, slug)
-            pending.append((slug, number, delay_min, t))
-            delayed_slugs.add(slug)
+    # 45+ per-line files: fetch them concurrently (serial walk was ~3 min on
+    # slow links); CloudFront in front of the official API takes the small
+    # per-bake burst without complaint
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        for slug, d in ex.map(lambda s: (s, _get(src, f"{s}.json", f"wg-trains-{s}.json")), list(slug_names)):
+            if d and d.get("update"):
+                stamps.append(str(d["update"]))
+            for t in (d or {}).get("trains") or []:
+                if not isinstance(t, dict):
+                    continue
+                delay_min = int(t.get("delayMinutes") or 0)
+                if delay_min < DELAY_THRESHOLD_MIN:
+                    continue
+                number = str(t.get("no") or "").strip()
+                if not number:
+                    continue
+                # a through train crossing a line boundary appears under both
+                # slugs - keep one record per train number
+                if any(p[1] == number for p in pending):
+                    continue
+                slug_names.setdefault(slug, slug)
+                pending.append((slug, number, delay_min, t))
+                delayed_slugs.add(slug)
 
     # station names only for lines that actually have delayed trains
     station_names = {}
-    for slug in delayed_slugs:
-        st = _get(src, f"{slug}_st.json", f"wg-st-{slug}.json")
-        for row in (st or {}).get("stations") or []:
-            info = row.get("info") or {}
-            if info.get("code"):
-                station_names[info["code"]] = info.get("name")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        for slug, st in ex.map(lambda s: (s, _get(src, f"{s}_st.json", f"wg-st-{s}.json")), list(delayed_slugs)):
+            for row in (st or {}).get("stations") or []:
+                info = row.get("info") or {}
+                if info.get("code"):
+                    station_names[info["code"]] = info.get("name")
 
     def _dest_text(raw):
         # dest is normally {text, code, line} but the live API sometimes

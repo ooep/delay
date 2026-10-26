@@ -29,10 +29,12 @@ def _calendar_file(weekday):
 
 
 class SukiTimetable:
-    """key -> sorted dep-minute list for the day's calendar."""
+    """key -> sorted dep-minute list for the day's calendar, plus the full
+    run/dwell series per key (for passage-time lookups by station)."""
 
-    def __init__(self, runs_by_key, source_file):
+    def __init__(self, runs_by_key, series_by_key, source_file):
         self.runs = runs_by_key
+        self._series = series_by_key
         self.source_file = source_file
 
     @classmethod
@@ -45,19 +47,37 @@ class SukiTimetable:
         except Exception:
             return None
         runs = {}
+        series = {}
         for t in d.get("T") or []:
             if not isinstance(t, dict):
                 continue
             key = str(t.get("t"))
             parts = str(t.get("s") or "").split(",")
             try:
-                dep0 = int(parts[0])
+                nums = [int(x) for x in parts if x != ""]
+                dep0 = nums[0]
             except (ValueError, IndexError):
                 continue
             runs.setdefault(key, []).append(dep0)
+            # "depMin,run1,dwell1,run2,dwell2,..." - run minutes at odd slots
+            series.setdefault(key, []).append(
+                {"dep0": dep0, "runs": nums[1::2]}
+            )
         for lst in runs.values():
             lst.sort()
-        return cls(runs, p.name)
+        return cls(runs, series, p.name)
+
+    def passage_times(self, key, stops, station):
+        """Arrival minute at `station` for every run of `key`.
+        `stops` must be the key's normalized station list (same norm as
+        `station`). Returns sorted [(arrive_min, dep0), ...]."""
+        recs = self._series.get(str(key))
+        if not recs or station not in stops:
+            return []
+        idx = stops.index(station)
+        out = [(r["dep0"] + sum(r["runs"][:idx]), r["dep0"]) for r in recs]
+        out.sort()
+        return out
 
     def run_near(self, key, dep_min, tol=4):
         """Dep minute of a run of `key` within ±tol of dep_min, or None."""

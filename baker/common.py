@@ -67,8 +67,8 @@ def http_get(url, headers=None, retries=3, timeout=30):
     raise last
 
 
-def get_json(url, headers=None):
-    return json.loads(http_get(url, headers))
+def get_json(url, headers=None, retries=3):
+    return json.loads(http_get(url, headers, retries=retries))
 
 
 def jst_now():
@@ -109,7 +109,9 @@ class Source:
     def timetable_index(self):
         if self.offline:
             return self.offline.get_json("tt-index.json")
-        return get_json(DOKORAIL + "/rail/timetables/startup-v3-index.json")
+        # large JSON on a flaky CDN: two attempts max - a third full re-read
+        # costs minutes for zero gain, and the bake degrades to no-legs anyway
+        return get_json(DOKORAIL + "/rail/timetables/startup-v3-index.json", retries=2)
 
     def bundle(self, url_or_path):
         if self.offline:
