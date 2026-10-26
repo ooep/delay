@@ -28,7 +28,9 @@ HEADERS = """/*
   Access-Control-Allow-Headers: *
   Access-Control-Max-Age: 86400
   Access-Control-Expose-Headers: ETag, Last-Modified, Content-Length, Content-Type
-*/
+
+/*.json
+  Cache-Control: public, max-age=300
 """
 ROBOTS = "User-agent: *\nDisallow: /\n"
 
