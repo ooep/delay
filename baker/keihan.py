@@ -28,12 +28,27 @@ Keihan.MainLineOto, "京阪電気鉄道京阪本線・鴫野線"): MainLineOto (
 Nakanoshima (中之島線), Uji (宇治線), Katano (交野線).
 """
 
+import re
+
 from . import common
 
 BASE = "https://www.keihan.co.jp"
 POSITION_URL = BASE + "/zaisen-up/trainPositionList.json"
 
 DELAY_THRESHOLD_MIN = 1
+
+# Keihan's delayMinutes is a STRING that may carry the unit ("6分遅れ",
+# ""), or a plain number depending on the file roll - parse both safely.
+_DELAY_RE = re.compile(r"(\d+)")
+
+
+def _delay_minutes(v):
+    if isinstance(v, (int, float)):
+        return int(v)
+    if v is None:
+        return 0
+    m = _DELAY_RE.match(str(v).strip())
+    return int(m.group(1)) if m else 0
 
 # board line name + dokorail railways for legs (order = search priority)
 KEIHAN_RAILWAYS = [
@@ -77,7 +92,7 @@ def fetch(src=None):
     body = []
     for t, _cell in _collect(d):
         number = str(t.get("trainNumber") or "").strip()
-        delay_min = int(t.get("delayMinutes") or 0)
+        delay_min = _delay_minutes(t.get("delayMinutes"))
         if not number and delay_min < DELAY_THRESHOLD_MIN:
             continue
         if not number:
