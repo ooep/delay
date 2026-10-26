@@ -37,6 +37,14 @@ jr-static tmaps.json ─┘        (只下载有晚点列车的线路)      (Pag
 - `ambiguous: true` 表示同一线路同一停站 pattern 有多班晚点列车打到了同一个
   key（或一个 key 被多班命中）。**用时刻决胜**：`web/delay-tag.js` 的
   `for(key, {depMin})` 会按发车时刻就近选择；时刻逻辑在你侧，烘焙侧不猜。
+- **主站时刻表直接映射的进展（2026-10-26）**：refresh 已每周快照主站全套
+  `trains_wd/sa/su.json` 到 `data/suki/`（86k 班全国运行记录，含逐站到发
+  间隔分钟与站号索引）。已破译：`T[].s` = "起点站号,间隔分钟…"，站号可经
+  `station_map.json` 的 stations 插入序解码为站名（实测 294→越後曽根 ✓），
+  `t`/`STA_TM` 为发车秒。**未破译**：T 条目↔tmaps 键的对应关系（同一
+  pattern 全天多班共用一个 key，主站编译管线里应该有这个映射）——拿到
+  该映射后，烘焙侧可直接用「站序+时刻」把延误列车对到主站的唯一班次，
+  ambiguous 全部消除，sukijr 变成严格一一对应。
 
 ## 映射规则（全部实测验证）
 
