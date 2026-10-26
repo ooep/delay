@@ -228,7 +228,7 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
 
 
 def _collapse_by_time(stt, suki_index, cands, station, now, delay_min,
-                      tol=10, leg_stops=None):
+                      tol=10, leg_stops=None, dep_feed=None):
     """Collapse station-sequence-identical suki candidates (loop lines run
     the same number several times a day: 山手線 G trains, 内房線 repeaters)
     to the unique run whose reported-station passage time ≈ now − delay.
@@ -243,6 +243,11 @@ def _collapse_by_time(stt, suki_index, cands, station, now, delay_min,
     pools contain both directions (11011 外回 vs 11016/10507 内回) and
     passage time alone can pick the wrong one, so a candidate whose next
     station after the reported station differs from the leg's is dropped.
+    `dep_feed` (the feed leg's scheduled departure minute) ranks candidates
+    by |suki dep0 − feed dep| first: the main site ties by departure minute,
+    so two loop keys whose passage gaps tie (10891 vs 11011 both 16 min off
+    at 鶯谷) must resolve to the key whose departure actually matches the
+    train (2100G dep 21:13 → 11011 dep0 21:00, not 10891 dep0 21:31).
     Returns a single-candidate list, or the original list when no unique
     hit."""
     if not stt or not station or len(cands) < 2:
@@ -287,14 +292,29 @@ def _collapse_by_time(stt, suki_index, cands, station, now, delay_min,
         pas = stt.passage_times(key, stops_n, anchor)
         if not pas:
             continue
-        best = min((abs(p - est), p, d) for p, d in pas)
-        scored.append((best[0], c, best[1], best[2]))
+        # every run of the key participates: a key runs many times a day
+        # (11011 外回双圈 122 班), and the deciding signal is the feed's
+        # scheduled departure vs the run's dep0 - a train that left 大崎 at
+        # 20:55 must land on the 20:55 run (dep_dev=0), not merely on the
+        # passage-closest run (21:00 run may have a marginally smaller gap).
+        for p, d in pas:
+            dep_dev = abs(d - dep_feed) if dep_feed is not None else 0
+            scored.append((dep_dev, abs(p - est), c, p, d))
     if not scored:
         return cands
-    scored.sort(key=lambda x: x[0])
-    if len(scored) >= 2 and scored[1][0] - scored[0][0] <= 2 and scored[0][0] <= tol:
+    scored.sort(key=lambda x: (x[0], x[1]))
+    # ambiguous only when the two best candidates are near-equal in BOTH
+    # departure deviation and passage gap (8356/11011 share dep_dev=6 but
+    # differ 3 vs 9 min passage → 8356 wins; two true same-pattern runs
+    # would tie in both and stay ambiguous for the front-end to break)
+    if (
+        len(scored) >= 2
+        and scored[1][0] - scored[0][0] <= 2
+        and scored[1][1] - scored[0][1] <= 2
+        and scored[0][1] <= tol
+    ):
         return cands  # two runs nearly equally close -> ambiguous
-    gap, cand, pmin, dep0 = scored[0]
+    dep_dev, gap, cand, pmin, dep0 = scored[0]
     c2 = dict(cand)
     c2["dep_run"] = f"{pmin // 60:02d}:{pmin % 60:02d}"
     # suki 口径的发车分钟(与主站 train.depMin 同基准):by_key 的 dep 决胜
@@ -1022,6 +1042,7 @@ def bake(source, data_dir):
                         collapsed = _collapse_by_time(
                             stt, suki_index, cands, report_station,
                             now, round(delay / 60), leg_stops=stations,
+                            dep_feed=_hhmm_min(dep_hhmm),
                         )
                         if collapsed and len(collapsed) == 1:
                             cands = collapsed
