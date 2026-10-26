@@ -156,7 +156,9 @@ def _verify_passage(suki_index, stt, cands, origin_station, dep_hhmm, tol=5):
     return verified, rest
 
 
-def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min, train_type=None, tol=DIRECT_TIME_TOLERANCE_MIN, official=None):
+def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
+                            train_type=None, tol=DIRECT_TIME_TOLERANCE_MIN,
+                            official=None, dest=None):
     """严格强匹配:把 suki-direct 多候选按『报告站过站时刻 ≈ 表定時刻』
     收敛。三条硬约束(参考在来線 find_leg 的匹配语义,宁漏不误报):
     ① 候选 key 的站序须符合车种特征(_type_compatible)，且当官方発車順序
@@ -172,9 +174,14 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min, trai
         est = now.hour * 60 + now.minute - (delay_min or 0)
     want = suki.norm_station(station)
     scored = []
+    want_dest = suki.norm_station(dest) if dest else None
     for c in cands:
         key = str(c["key"])
         stops_n = suki_index._stops_norm[key]
+        # terminus must match the feed's reported destination - collapses
+        # commuter-line pools (local to 君津 vs rapid to 館山 on 内房線)
+        if want_dest and stops_n and stops_n[-1] != want_dest:
+            continue
         # suki names carry prefecture qualifiers (高松(香川県)) while live
         # feeds report the bare station (高松) - same suffixed-variant rule
         # as match_direct, inside the line-filtered pool
@@ -859,6 +866,7 @@ def bake(source, data_dir):
                                     stt, suki_index, direct,
                                     t["_station"], now, round(delay / 60),
                                     entry.get("type"), official=official,
+                                    dest=t.get("_dest"),
                                 )
                                 if resolved:
                                     entry["suki"] = [resolved["cand"]]
