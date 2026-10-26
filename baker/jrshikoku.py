@@ -42,6 +42,7 @@ LINE_MAP = {
     "seto": "JR-Shikoku.HonshiBisan",
     "setoohashi": "JR-Shikoku.HonshiBisan",
     "mugi": "JR-Shikoku.Mugi",
+    "kubokawa": "JR-Shikoku.Yodo",  # 予土線（宇和島～窪川）
 }
 
 # line code -> Japanese line name (the feed only carries codes; the suki /
@@ -58,6 +59,7 @@ LINE_JA = {
     "seto": "本四備讃線",
     "setoohashi": "本四備讃線",
     "mugi": "牟岐線",
+    "kubokawa": "予土線",
 }
 
 _POS_PAREN = re.compile(r"[（(][^（）()]*[）)]")
