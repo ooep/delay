@@ -222,6 +222,54 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
     return {"cand": c2, "scheduled": scheduled}
 
 
+def _collapse_by_time(stt, suki_index, cands, station, now, delay_min,
+                      tol=10):
+    """Collapse station-sequence-identical suki candidates (loop lines run
+    the same number several times a day: 山手線 G trains, 内房線 repeaters)
+    to the unique run whose reported-station passage time ≈ now − delay.
+    At one moment only one train can be at one station on one path, so a
+    unique close passage wins; two nearly-equidistant runs stay ambiguous
+    and are dropped (宁漏不误报). The tolerance is generous (10 min) because
+    the reported delay itself is only accurate to a few minutes. When every
+    candidate is too far off, the temporally closest one wins - the loop
+    position estimate has its own error, and station-sequence ties without
+    any time evidence resolve to the run whose schedule best brackets now.
+    Returns a single-candidate list, or the original list when no unique
+    hit."""
+    if not stt or not station or len(cands) < 2:
+        return cands
+    want = suki.norm_station(station)
+    est = now.hour * 60 + now.minute - (delay_min or 0)
+    scored = []
+    for c in cands:
+        key = str(c["key"])
+        stops_n = suki_index._stops_norm.get(key)
+        if not stops_n:
+            continue
+        if want not in stops_n and not suki_index._has_pref_suffixed(stops_n, want):
+            continue
+        anchor = want if want in stops_n else next(
+            (s for s in stops_n if s.startswith(want) and s[len(want):].endswith(("都", "道", "府", "県"))),
+            None,
+        )
+        if anchor is None:
+            continue
+        pas = stt.passage_times(key, stops_n, anchor)
+        if not pas:
+            continue
+        best = min((abs(p - est), p) for p, _ in pas)
+        scored.append((best[0], c, best[1]))
+    if not scored:
+        return cands
+    scored.sort(key=lambda x: x[0])
+    if len(scored) >= 2 and scored[1][0] - scored[0][0] <= 2 and scored[0][0] <= tol:
+        return cands  # two runs nearly equally close -> ambiguous
+    gap, cand, pmin = scored[0]
+    c2 = dict(cand)
+    c2["dep_run"] = f"{pmin // 60:02d}:{pmin % 60:02d}"
+    return [c2]
+
+
 def _safe_feed(name, thunk):
     """Run one feed defensively: any unexpected provider change (format
     drift, 5xx, schema swap) must cost that operator's data, not the whole
@@ -905,6 +953,18 @@ def bake(source, data_dir):
                     )
                     if verified:
                         cands = verified + rest
+                if cands and stt and len(cands) > 1:
+                    # station-sequence ties (山手線/通勤线同号多圈) that survive
+                    # verify are collapsed by the reported station's passage
+                    # time ≈ now − delay: same moment, same path, one train.
+                    report_station = t.get("_station") or entry.get("from")
+                    if report_station:
+                        collapsed = _collapse_by_time(
+                            stt, suki_index, cands, report_station,
+                            now, round(delay / 60),
+                        )
+                        if collapsed and len(collapsed) == 1:
+                            cands = collapsed
                 if cands:
                     entry["suki"] = cands
             board.append(entry)
