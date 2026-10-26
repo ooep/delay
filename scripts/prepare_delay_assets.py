@@ -4,15 +4,15 @@
 prepare_delay_assets.py — 组装 jr-delay 纯静态 Worker 的 assets 目录。
 
 从 data/ 把主站消费的 JSON 复制到 static-worker/assets/（内容直接放 assets 根，
-路由 /data/delay/* → assets 根，线上 URL 即 https://jr-static.suki.ing/data/delay/<file>）并补 CORS 头：
-  data/delays.json            → assets/delays.json        → …/data/delay/delays.json
+域名 jr-delay.suki.ing → assets 根，线上 URL 即 https://jr-delay.suki.ing/<file>）并补 CORS 头：
+  data/delays.json            → assets/delays.json        → https://jr-delay.suki.ing/delays.json
   data/sukijr.json            → assets/sukijr.json
   data/lines.json             → assets/lines.json
   data/keikyu-positions.json  → assets/keikyu-positions.json
   data/suki/                  → assets/suki/（每周快照，烘焙输入缓存）
 
 部署由 bake-delays.yml 的 wrangler deploy 完成（仅资产模式，零计费）。
-线上 URL: https://jr-static.suki.ing/data/delay/delays.json
+线上 URL: https://jr-delay.suki.ing/delays.json
 """
 import os
 import shutil

@@ -1,14 +1,13 @@
 # jr-delay — delay 数据纯静态 Worker（仅资产，无 Worker 脚本，零计费）
 # 由 bake-delays.yml 每次烘焙后组装 assets 并 wrangler deploy（哈希增量，秒级跳过）。
-# 通过 routes 挂到主站数据域名同一路径：URL = https://jr-static.suki.ing/data/delay/*
+# 域名绑定在 Cloudflare Dashboard 完成：jr-delay.suki.ing → jr-delay（Zone Route）
+# 线上 URL: https://jr-delay.suki.ing/delays.json（主站消费）
 # CORS 由 assets 根 _headers 提供（平台层应用，同样零 Worker 调用）。
+# 注意: routes 不写在此文件 —— token 无 Zone Workers Routes 权限时 wrangler 建路由会报错;
+# 路由已在 Dashboard 手动创建（pattern jr-delay.suki.ing/* → script jr-delay）。
 
 name = "jr-delay"
 compatibility_date = "2026-10-13"
-
-routes = [
-  { pattern = "jr-static.suki.ing/data/delay/*", zone_name = "suki.ing" },
-]
 
 [assets]
 directory = "./assets"

@@ -76,8 +76,8 @@ jobs:
           fi
 
       # 部署 delay JSON 到 Cloudflare jr-delay 静态 Worker（仅资产、零计费）。
-      # 路由 jr-static.suki.ing/data/delay/* → 主站主源即
-      # https://jr-static.suki.ing/data/delay/data/delays.json
+      # 域名路由 jr-delay.suki.ing/* 已在 Dashboard 创建，主站主源即
+      # https://jr-delay.suki.ing/delays.json
       # wrangler 按内容哈希增量上传：数据未变化时秒级跳过。
       - name: Deploy delay JSON to Cloudflare (jr-delay, static, zero-cost)
         if: ${{ env.CF_API_TOKEN != '' }}
