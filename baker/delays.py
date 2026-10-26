@@ -752,6 +752,7 @@ def bake(source, data_dir):
             for _part in (_t.get("_line_ja") or "").split("・"):
                 cand_rails.update(titles.get(_part, []))
     store.prefetch(cand_rails)
+    claimed_suki = {}  # key -> train number, global uniqueness: one suki train per bake
     for op, payload in feeds:
         if not payload or not payload.get("ok"):
             op_stats[op] = {"feed": "unavailable"}
@@ -922,6 +923,14 @@ def bake(source, data_dir):
                                     dest=t.get("_dest"),
                                 )
                                 if resolved:
+                                    rk = str(resolved["cand"]["key"])
+                                    # global uniqueness: a suki train can only be
+                                    # occupied by one live train per bake (loop
+                                    # lines like 山手線 would otherwise map every
+                                    # passing train to the same loop entry)
+                                    if rk in claimed_suki:
+                                        continue
+                                    claimed_suki[rk] = t.get("number", "?")
                                     entry["suki"] = [resolved["cand"]]
                                     entry["scheduled"] = resolved["scheduled"]
                 if leg:
