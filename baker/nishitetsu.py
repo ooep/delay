@@ -40,10 +40,14 @@ POSITIONS_PATH = "nishitetsu-positions.json"  # static row->station table, ships
 DELAY_THRESHOLD_MIN = 1
 DELAY_RE = re.compile(r"^(\d+)分遅れ")
 
-# stop-table code prefix -> (board/dokorail title, suki line name, dokorail railways)
+# stop-table code prefix -> (board/dokorail title, suki line name, dokorail railways).
+# Branch through-services (Amagi/Dazaifu) run on the Tenjin-Omuta main line for
+# most of their path before branching off, so the position engine must search
+# BOTH the branch bundle and Tenjin-Omuta - find_leg_by_position picks the
+# directed leg via dest_hint (dest==leg terminus), so no cross-fire.
 LINE_MAP = {
-    "D": ("西日本鉄道太宰府線", "太宰府線", ["Nishitetsu.Dazaifu"]),
-    "A": ("西日本鉄道甘木線", "西鉄甘木線", ["Nishitetsu.Amagi"]),
+    "D": ("西日本鉄道太宰府線", "太宰府線", ["Nishitetsu.Dazaifu", "Nishitetsu.TenjinOmuta"]),
+    "A": ("西日本鉄道甘木線", "西鉄甘木線", ["Nishitetsu.Amagi", "Nishitetsu.TenjinOmuta"]),
     "T": ("西日本鉄道天神大牟田線", "天神大牟田線", ["Nishitetsu.TenjinOmuta"]),
 }
 
