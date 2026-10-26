@@ -6,6 +6,7 @@ Actions runs need no pip install.
 
 import gzip
 import json
+import os
 import re
 import ssl
 import time
@@ -14,7 +15,10 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-DOKORAIL = "https://dokorail.jp"
+# DOKORAIL can be pointed at a reverse proxy (e.g. Vercel edge) to dodge
+# Cloudflare's runner-IP block. Set DOKORAIL_BASE in the Action env.
+DOKORAIL = os.environ.get("DOKORAIL_BASE", "https://dokorail.jp")
+DOKORAIL_ORIGIN = "https://dokorail.jp"
 SUKI_STATIC = "https://jr-static.suki.ing/data"
 JST = timezone(timedelta(hours=9))
 GEOMETRY_URL_RE = re.compile(r"/rail/geometry/sha256/[0-9a-f]{64}\.json")
@@ -121,6 +125,9 @@ class Source:
                 if p.exists():
                     return json.loads(p.read_text())
             return None  # offline fixtures are partial; skip missing calendars
+        # Rewrite absolute upstream URLs so they also flow through the proxy.
+        if url_or_path.startswith(DOKORAIL_ORIGIN + "/"):
+            url_or_path = DOKORAIL + url_or_path[len(DOKORAIL_ORIGIN):]
         return get_json(url_or_path)
 
     def train_feed(self, operator):

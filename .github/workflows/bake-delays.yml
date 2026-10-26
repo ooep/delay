@@ -42,6 +42,9 @@ jobs:
       # optional: Cloudflare API token for jr-delay static deploy
       # (Workers Static Assets, pure static, zero-cost). Missing -> skip deploy.
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      # Reverse proxy for dokorail.jp to bypass Cloudflare runner-IP block.
+      # Public Vercel edge; unset -> hits dokorail.jp directly.
+      DOKORAIL_BASE: "https://dokorail-proxy.vercel.app"
     steps:
       - uses: actions/checkout@v4
 
