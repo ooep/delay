@@ -88,6 +88,27 @@ def _get(url):
     return common.get_json(url, headers={"Referer": BASE + "/separate-page?screen=2"})
 
 
+def _get_both_kbns(code, station):
+    """Fetch upperLowerKbn=1 and =2 for one route in parallel (2 threads).
+    Each train appears under exactly one kbn (its direction), so both must
+    be requested to see every train on the route."""
+    from concurrent.futures import ThreadPoolExecutor
+    urls = [
+        f"{TRAIN_POS_URL}?drivingRouteCode={code}&upperLowerKbn={kbn}"
+        f"&stationCode={station}&isVisibleAllTrain=true&lang=ja"
+        for kbn in (1, 2)
+    ]
+    out = [None, None]
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        futs = {ex.submit(_get, u): i for i, u in enumerate(urls)}
+        for f in futs:
+            try:
+                out[futs[f]] = f.result()
+            except Exception:
+                out[futs[f]] = None
+    return out
+
+
 def parse_raw(routes_data, now=None):
     """[(code, line_name, payload, dokorail_railways)] -> dokorail-feed-
     shaped payload. body entries carry _number_prefix (bare trainNumber as
@@ -157,15 +178,16 @@ def fetch(src=None):
     else:
         routes = []
         for code, line_name, station, railways in ROUTES:
-            try:
-                payload = _get(
-                    f"{TRAIN_POS_URL}?drivingRouteCode={code}&upperLowerKbn=2"
-                    f"&stationCode={station}&isVisibleAllTrain=true&lang=ja"
-                )
-            except Exception:
-                continue
-            if isinstance(payload, dict) and payload.get("trainPositionList"):
-                routes.append((code, line_name, payload, railways))
+            # both directions (145M southbound lives under kbn=1), fetched
+            # per-route in parallel - never more than 2 concurrent
+            # connections, keeps the Akamai edge calm while halving latency
+            payloads = _get_both_kbns(code, station)
+            for kbn_payload in payloads:
+                if kbn_payload is None:
+                    continue
+                payload = kbn_payload
+                if isinstance(payload, dict) and payload.get("trainPositionList"):
+                    routes.append((code, line_name, payload, railways))
     if not routes:
         return None
     return parse_raw(routes)
