@@ -91,6 +91,9 @@ TITLE_ALIASES = {
     # JR-West (through services) and 本四備讃線 by JR-Shikoku - suki data
     # uses the JR-Shikoku name
     "瀬戸大橋線": {"本四備讃線", "瀬戸大橋線"},
+    # 仙台空港アクセス線 (formal name used by doko-train feeds) vs the
+    # short name suki data tags it with
+    "仙台空港アクセス線": {"仙台空港線", "仙台空港アクセス線"},
 }
 
 # RAILWAY_ALIASES: titles that collide across operators resolve by railway id.
