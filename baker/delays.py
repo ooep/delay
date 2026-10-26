@@ -14,7 +14,7 @@ import os
 import re
 from pathlib import Path
 
-from . import common, suki
+from . import common, suki, suki_timetable
 
 DELAY_THRESHOLD_SECONDS = 60
 MAX_CANDIDATES = 3
@@ -353,6 +353,11 @@ def bake(source, data_dir):
     now = common.jst_now()
     store = LegStore(source, index, lines["lines"], now.date().isoformat(), now.weekday(), now.hour * 60 + now.minute)
     suki_index = suki.SukiIndex.load(data_dir)
+    # the site's own timetable turns station-sequence candidates into
+    # time-verified unique mappings (T.t = tmaps key, T.s[0] = dep minute)
+    stt = suki_timetable.SukiTimetable.load(data_dir, now.weekday())
+    if stt:
+        print(f"suki timetable: {len(stt.runs)} keys from {stt.source_file}")
 
     board = []
     op_stats = {}
@@ -526,6 +531,14 @@ def bake(source, data_dir):
                         cands = suki_index.match(stations, part, railway=railway)
                         if cands:
                             break
+                if cands and stt:
+                    # time-verify: keep only keys that actually run at this
+                    # train's departure minute today; unverified candidates
+                    # trail as fallback (no dep time known / snapshot stale)
+                    dep_hhmm = entry.get("scheduled", {}).get("dep")
+                    verified, rest = stt.verify_candidates(cands, dep_hhmm)
+                    if verified:
+                        cands = verified + rest
                 if cands:
                     entry["suki"] = cands
             board.append(entry)
@@ -559,7 +572,7 @@ def bake(source, data_dir):
                     "type": e["type"],
                     "dep": e.get("scheduled", {}).get("dep"),
                     "score": c["overlap"],
-                    "fuzzy": 0 if c["subseq"] else c.get("fuzzy"),
+                    "fuzzy": 0 if c.get("subseq") else c.get("fuzzy", 0),
                     "ambiguous": False,
                     "alternatives": [],
                 },
