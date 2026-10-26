@@ -91,6 +91,17 @@ def _stops_consistent(stops_n, report_station, official):
     return True
 
 
+def _hhmm_min(hhmm):
+    """"HH:MM" (hours may exceed 23) -> minutes from midnight, or None."""
+    if not hhmm:
+        return None
+    try:
+        h, m = str(hhmm).split(":")
+        return int(h) * 60 + int(m)
+    except (ValueError, AttributeError):
+        return None
+
+
 def _verify_passage(suki_index, stt, cands, origin_station, dep_hhmm, tol=5):
     """Time-verify suki candidates at the leg's origin station, using each
     candidate's *passage time there* instead of its own dep minute.
@@ -897,7 +908,24 @@ def bake(source, data_dir):
     board.sort(key=lambda e: (-e["delay_s"], e["railway"], e["number"] or ""))
     by_key = {}
     for e in board:
-        for c in e.get("suki", []):
+        cand_items = e.get("suki") or []
+        # 同一列车多条时间验证通过的候选:只保留与表定时刻差最小的
+        # 一条;差并列(同刻多班,如予讃線 15:28 两班)无法确定真身→宁漏
+        verified = [c for c in cand_items if "dep_run" in c]
+        if len(verified) > 1:
+            dep_min = _hhmm_min(e.get("scheduled", {}).get("dep"))
+            if dep_min is not None:
+                scored = [
+                    (abs(_hhmm_min(c["dep_run"]) - dep_min), c)
+                    for c in verified
+                    if _hhmm_min(c["dep_run"]) is not None
+                ]
+                if scored:
+                    best_delta = min(s for s, _ in scored)
+                    ties = [c for s, c in scored if s == best_delta]
+                    cand_items = [ties[0]] if len(ties) == 1 else []
+            e["suki"] = cand_items
+        for c in cand_items:
             # strong matches only for the flat lookup table: exact ordered
             # containment, or off by at most one stop (stopping-pattern drift
             # between the datasets); suki-direct candidates are trusted only
