@@ -7,7 +7,8 @@ name: bake-delays
 #     geometry catalog (data/lines.json) and jr.suki.ing's tmaps.json +
 #     lines_map.json snapshots (data/suki/)
 #
-# jr.suki.ing reads data/delays.json via Pages / jsDelivr. Its by_suki_key
+# jr.suki.ing reads data/delays.json via Cloudflare Workers Static Assets
+# (jr-static.suki.ing/data/delay/*, pure static, zero-cost). Its by_suki_key
 # table tags the site's own trains with zero join logic. Board carries
 # generated_at so the UI can show its age; GitHub cron jitters, so treat
 # this as a refreshed snapshot, not a realtime stream.
@@ -32,12 +33,15 @@ concurrency:
 jobs:
   bake:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       # optional: ODPT consumer key (developer.odpt.org, free) enables
       # Keikyu/Tobu/YokohamaMunicipal via api.odpt.org; without it only
       # Toei comes through the keyless public mirror
       ODPT_KEY: ${{ secrets.ODPT_KEY }}
+      # optional: Cloudflare API token for jr-delay static deploy
+      # (Workers Static Assets, pure static, zero-cost). Missing -> skip deploy.
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,6 +54,10 @@ jobs:
 
       - name: Bake delay board
         run: python -m baker.delays --data-dir data
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Commit if changed
         run: |
@@ -66,3 +74,16 @@ jobs:
               echo "push retry $i"; sleep 10
             done
           fi
+
+      # 部署 delay JSON 到 Cloudflare jr-delay 静态 Worker（仅资产、零计费）。
+      # 路由 jr-static.suki.ing/data/delay/* → 主站主源即
+      # https://jr-static.suki.ing/data/delay/data/delays.json
+      # wrangler 按内容哈希增量上传：数据未变化时秒级跳过。
+      - name: Deploy delay JSON to Cloudflare (jr-delay, static, zero-cost)
+        if: ${{ env.CF_API_TOKEN != '' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: c75ed9a498500d7c232d9d59a353341d
+        run: |
+          python3 scripts/prepare_delay_assets.py
+          npx wrangler@4 deploy --config static-worker/wrangler.toml 2>&1 | tail -12
