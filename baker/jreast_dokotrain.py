@@ -30,6 +30,13 @@ STATION_MASTER_URL = BASE + "/json/station/dokotrain_station_master.json"
 
 DELAY_THRESHOLD_MIN = 1
 
+# mini-Shinkansen (山形 902Y / 秋田 110A) run on physical 本線 tracks and the
+# suki dataset labels them by the physical line, not the Shinkansen brand
+SUKI_LINE_REWRITES = {
+    "山形新幹線": "奥羽本線",
+    "秋田新幹線": "田沢湖線",
+}
+
 
 def _j(src, url, offline_name):
     if src.offline:
@@ -103,7 +110,7 @@ def fetch(src=None):
                 "odpt:trainNumber": number,
                 "odpt:delay": int(latency) * 60,
                 "_line_ja": line_name,
-                "_suki_line": line_name,
+                "_suki_line": SUKI_LINE_REWRITES.get(line_name, line_name),
                 "_station": stations.get(at),
                 "_dokotrain_line": lid,
             }
