@@ -205,11 +205,14 @@ class SukiIndex:
     # separates こだま from のぞみ cleanly; 車種 key-station 校验在
     # resolve_direct_by_time 里做, bucket 只做第一道粗筛)
     TYPE_STOP_BUCKETS = {
-        "のぞみ": (0, 11),   # 全程(東京→博多)11 站;2026-10 实测 8068=11 站
+        # 上限必须覆盖全程车终点多出的站:のぞみ 東京⇄博多=12 站(含東京);
+        # さくら/みずほ 新大阪→鹿児島中央=17 站(2456 实测);2026-10 实测
+        # 8068=11 站(博多終点)仍在界内
+        "のぞみ": (0, 12),
         "ひかり": (10, 13),
         "こだま": (12, 99),
-        "みずほ": (0, 8),
-        "さくら": (0, 13),   # 全程(東京→鹿児島中央)13 站
+        "みずほ": (0, 10),
+        "さくら": (0, 20),
     }
 
     def match_direct(self, line_title, station, direction=None, train_type=None, top=3):

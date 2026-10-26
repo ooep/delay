@@ -38,6 +38,40 @@ LINE_NAME_REWRITES = {
 # delay: <minutes>}. Kind codes / station indices resolve via common_ja.json.
 SHINKANSEN_LOC_URL = BASE + "/shinkansen/var/train_info/train_location_info.json"
 SHINKANSEN_COMMON_URL = BASE + "/shinkansen/common/data/common_ja.json"
+# 発車順序案内（官方表定時刻 + 停站序列）: departure_info_{station}_{bound}.json
+# bound: 1=上り(博多→東京) 2=下り(東京→博多)
+SHINKANSEN_DEP_URL = BASE + "/shinkansen/var/train_info/departure_info_{}_{}.json"
+
+# module-level cache of common_ja constant (station/train maps), filled by
+# fetch_shinkansen; used by fetch_shinkansen_departure to name stations
+_COMMON_CONST = {}
+
+
+def fetch_shinkansen_departure(src, station_code, bound, train_number, kind_code):
+    """官方発車順序案内: departure_info_{station}_{bound}.json — 该站该方向
+    的全天表定時刻表。返回该车次的 {departure: 表定過站分钟, stations: 后续
+    停站序列(站名, 不含报站), terminal: 终点站名}，用于与 suki 时刻表做
+    「表定对表定 + 站序一致性」的严格消歧。找不到/失败返回 None。"""
+    const = _COMMON_CONST.get(0) or {}
+    names = const.get("station") or {}
+    try:
+        d = common.get_json(
+            SHINKANSEN_DEP_URL.format(station_code, bound),
+            headers={"Referer": BASE + "/shinkansen/sp/ja/ti04.html"},
+            retries=2,
+        )
+        di = (d or {}).get("departureInfo", {}).get("data", [])
+        for rec in di:
+            if str(rec.get("trainNumber")) == str(train_number) and str(rec.get("train")) == str(kind_code):
+                return {
+                    "departure": rec.get("departureTime"),
+                    "stations": [names.get(str(s)) for s in (rec.get("stations") or [])],
+                    "terminal": names.get(str(rec.get("terminalStation"))),
+                }
+    except Exception as exc:
+        print(f"jrcentral departure {station_code}/{bound}/{train_number}: "
+              f"{type(exc).__name__}: {str(exc)[:120]}")
+    return None
 
 
 def _multi_lang(entries, lang="ja"):
@@ -76,6 +110,7 @@ def fetch_shinkansen(src):
     const = (common_data or {}).get("constant") or {}
     kind_names = const.get("train") or {}
     station_names = const.get("station") or {}
+    _COMMON_CONST[0] = const
 
     body = []
     seen = set()
@@ -117,6 +152,9 @@ def fetch_shinkansen(src):
                             "_railways": railways,
                             "_number_prefix": number,
                             "_station": station,
+                            "_station_code": station_code,
+                            "_bound": bound,
+                            "_train_kind": str(tr.get("train")),
                         }
                     )
     return body

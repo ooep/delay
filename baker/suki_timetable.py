@@ -59,9 +59,14 @@ class SukiTimetable:
             except (ValueError, IndexError):
                 continue
             runs.setdefault(key, []).append(dep0)
-            # "depMin,run1,dwell1,run2,dwell2,..." - run minutes at odd slots
+            # "depMin,run1,dwell1,run2,dwell2,..." - run minutes at odd slots,
+            # dwell minutes at even slots (after every stop but the last)
             series.setdefault(key, []).append(
-                {"dep0": dep0, "runs": nums[1::2]}
+                {
+                    "dep0": dep0,
+                    "runs": nums[1::2],
+                    "dwells": nums[2::2],
+                }
             )
         for lst in runs.values():
             lst.sort()
@@ -70,12 +75,30 @@ class SukiTimetable:
     def passage_times(self, key, stops, station):
         """Arrival minute at `station` for every run of `key`.
         `stops` must be the key's normalized station list (same norm as
-        `station`). Returns sorted [(arrive_min, dep0), ...]."""
+        `station`). Returns sorted [(arrive_min, dep0), ...].
+
+        Arrivals accumulate run+dwell alternately: arr[i]=dep[i-1]+run[i],
+        dep[i]=arr[i]+dwell[i] (no dwell after the final station), so the
+        arrival at station idx is dep0 + Σ(run[i]+dwell[i]) for i<idx.
+        Runs that don't even reach the station (shorter patterns) are
+        skipped by construction of the series."""
         recs = self._series.get(str(key))
         if not recs or station not in stops:
             return []
         idx = stops.index(station)
-        out = [(r["dep0"] + sum(r["runs"][:idx]), r["dep0"]) for r in recs]
+        out = []
+        for r in recs:
+            dep0 = r["dep0"]
+            runs = r["runs"]
+            dwells = r.get("dwells") or []
+            if idx > len(runs):
+                continue
+            acc = dep0
+            for i in range(idx):
+                acc += runs[i]
+                if i < len(dwells):
+                    acc += dwells[i]
+            out.append((acc, dep0))
         out.sort()
         return out
 

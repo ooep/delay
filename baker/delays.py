@@ -16,7 +16,7 @@ import re
 import threading
 from pathlib import Path
 
-from . import common, holidays, suki, suki_timetable
+from . import common, holidays, suki, suki_timetable, jrcentral
 
 DELAY_THRESHOLD_SECONDS = 60
 MAX_CANDIDATES = 3
@@ -42,7 +42,8 @@ def _type_compatible(stops_norm, train_type):
     if train_type in ("さくら", "みずほ"):
         return has_kago
     if train_type == "のぞみ":
-        return not has_kago and n <= 11
+        # 12 站 = 東京⇄博多 全程车(7237/193 实测);11 站 = 博多終点型(8068)
+        return not has_kago and n <= 12
     if train_type == "こだま":
         return n >= 12
     if train_type == "ひかり":
@@ -50,14 +51,60 @@ def _type_compatible(stops_norm, train_type):
     return True
 
 
-def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min, train_type=None, tol=DIRECT_TIME_TOLERANCE_MIN):
-    """严格强匹配:把 suki-direct 多候选按『报告站过站时刻 ≈ now - delay』
+def _stops_consistent(stops_n, report_station, official):
+    """候选 key 的停站序列必须与官方発車順序（departure_info）一致：
+    报站之后的候选停站须以官方后续停站为前缀（允许候选继续延伸，如
+    さくら 753 官方列表到博多、候选 2456 延伸到鹿児島中央），且官方
+    终点站必须落在候选站序中。站名兼容県后缀（小倉(福岡県) ↔ 小倉）。"""
+    off_stations = [s for s in (official.get("stations") or []) if s]
+    terminal = official.get("terminal")
+    try:
+        idx = stops_n.index(report_station)
+    except ValueError:
+        for i, s in enumerate(stops_n):
+            if s.startswith(report_station) and s[len(report_station):].endswith(("都", "道", "府", "県")):
+                idx = i
+                break
+        else:
+            return False
+    tail = stops_n[idx + 1:]
+    n_off = len(off_stations)
+    # 站数一致性: 候选报站后的站数必须等于官方后续停站数, 或 +1
+    # (官方终点站延伸在列表外, 如 753 官方到川内 + 鹿児島中央终点)
+    if not (n_off <= len(tail) <= n_off + 1):
+        return False
+    for i, off in enumerate(off_stations):
+        cand = tail[i]
+        if cand != off and not (cand.startswith(off) and cand[len(off):].endswith(("都", "道", "府", "県"))):
+            return False
+    if len(tail) == n_off + 1 and terminal and tail[-1] != terminal:
+        # 多出的那一站必须是官方终点站(或带県后缀变体)
+        if not (tail[-1].startswith(terminal) and tail[-1][len(terminal):].endswith(("都", "道", "府", "県"))):
+            return False
+    if terminal:
+        ok = terminal in stops_n or any(
+            s.startswith(terminal) and s[len(terminal):].endswith(("都", "道", "府", "県"))
+            for s in stops_n
+        )
+        if not ok:
+            return False
+    return True
+
+
+def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min, train_type=None, tol=DIRECT_TIME_TOLERANCE_MIN, official=None):
+    """严格强匹配:把 suki-direct 多候选按『报告站过站时刻 ≈ 表定時刻』
     收敛。三条硬约束(参考在来線 find_leg 的匹配语义,宁漏不误报):
-    ① 候选 key 的站序须符合车种特征(_type_compatible);
+    ① 候选 key 的站序须符合车种特征(_type_compatible)，且当官方発車順序
+       可用时与官方后续停站序列一致(_stops_consistent);
     ② 该 key 在容差窗口内必须只有一趟(同 key 多趟 → 无法确定具体班次 → 弃);
     ③ 全局唯一:与次优 key 的 gap 差 ≤ 2 → 模式歧义 → 弃。
+    official: {departure: 官方表定過站分钟, stations: 后续停站, terminal}。
+    表定對表定匹配（delay 是附加信息不参与匹配），缺失时回退 now-delay。
     返回 {"cand": 单候选, "scheduled": {dep, origin, stops}} 或 None。"""
-    est = now.hour * 60 + now.minute - (delay_min or 0)
+    if official is not None and official.get("departure") is not None:
+        est = official["departure"]
+    else:
+        est = now.hour * 60 + now.minute - (delay_min or 0)
     want = suki.norm_station(station)
     scored = []
     for c in cands:
@@ -69,6 +116,8 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min, trai
         if want not in stops_n and not suki_index._has_pref_suffixed(stops_n, want):
             continue
         if not _type_compatible(stops_n, train_type):
+            continue
+        if official is not None and not _stops_consistent(stops_n, want, official):
             continue
         anchor = want if want in stops_n else next(
             s for s in stops_n
@@ -693,28 +742,55 @@ def bake(source, data_dir):
                     direction = None
                     if num.isdigit():
                         direction = "down" if int(num) % 2 else "up"
+                    # JR-Central 新干线: 报站站码决定的线路 ≠ 车实际线路
+                    # (753 报站新大阪但終点鹿児島中央、2456 只 tag 山陽),
+                    # 跨東海道/山陽/九州全部新干线池合并候选;其他线路单池
+                    lines_pool = (["東海道新幹線", "山陽新幹線", "九州新幹線"]
+                                  if t.get("_train_kind") is not None
+                                  else [t["_line_ja"]])
                     direct = None
                     for station in (t.get("_station_keys") or [t.get("_station")]):
                         if not station:
                             continue
-                        direct = suki_index.match_direct(
-                            t["_line_ja"], station, direction,
-                            entry.get("type"), top=32,
-                        )
+                        merged = []
+                        # top 须覆盖全池: 候选按站数升序截断, 12 站全程车
+                        # (7237/193) 若 top 太小会被小站数车挤出, 导致宁漏
+                        for ln in lines_pool:
+                            merged += suki_index.match_direct(
+                                ln, station, direction,
+                                entry.get("type"), top=256,
+                            ) or []
+                        seen = set()
+                        direct = []
+                        for c in merged:
+                            if c["key"] not in seen:
+                                seen.add(c["key"])
+                                direct.append(c)
                         if direct:
                             break
                     if direct:
                             entry["suki"] = direct
                             entry["match"] = "suki-direct"
-                            # 时刻消歧：无 dokorail 时刻表的线路（新干线等）
-                            # 用 suki 时刻表把多候选收敛为唯一班次并补
-                            # scheduled（主站打标需要 dep/origin/stops）；
-                            # 消歧不出 → 保持多候选，by_key 只信单候选 → 不映射
+                            # 時刻消歧：无 dokorail 时刻表的线路（新幹線等）
+                            # 用 suki 時刻表把多候選收斂為唯一班次並補
+                            # scheduled（主站打標需要 dep/origin/stops）；
+                            # JR-Central 官方発車順序可用時，以官方表定時刻
+                            # 為基準 + 官方停站序列做站序一致性校驗；
+                            # 消歧不出 → 保持多候選，by_key 只信單候選 → 不映射
                             if stt and len(direct) > 1:
+                                official = None
+                                if t.get("_bound") is not None and t.get("_station_code") and t.get("_train_kind"):
+                                    try:
+                                        official = jrcentral.fetch_shinkansen_departure(
+                                            source, t["_station_code"], t["_bound"],
+                                            t.get("odpt:trainNumber"), t["_train_kind"],
+                                        )
+                                    except Exception:  # noqa: BLE001 - degrade to now-delay est
+                                        official = None
                                 resolved = resolve_direct_by_time(
                                     stt, suki_index, direct,
                                     t["_station"], now, round(delay / 60),
-                                    entry.get("type"),
+                                    entry.get("type"), official=official,
                                 )
                                 if resolved:
                                     entry["suki"] = [resolved["cand"]]
