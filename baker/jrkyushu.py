@@ -39,9 +39,29 @@ TRAIN_POS_URL = BASE + "/api/common/trainPosition"
 # endpoint), then finding one station of the route via the app or the
 # route's own response (it lists all its stations with codes).
 ROUTES = [
+    ("50", "長崎本線", "91120060",
+     ["JR-Kyushu.NagasakiMain"]),
+    ("100", "日豊本線", "91401250",
+     ["JR-Kyushu.Nippo", "JR-Kyushu.MiyazakiKuko"]),
+    ("130", "久大本線", "91101380",
+     ["JR-Kyushu.KyudaiMain"]),
+    ("170", "豊肥本線", "91301210",
+     ["JR-Kyushu.HohiMain"]),
+    ("200", "指宿枕崎線", "91401250",
+     ["JR-Kyushu.IbusukiMakurazaki"]),
+    ("210", "宮崎空港線", "91405040",
+     ["JR-Kyushu.MiyazakiKuko"]),
+    ("220", "日南線", "91405040",
+     ["JR-Kyushu.Nichinan"]),
+    ("312", "九州新幹線", "91401250",
+     ["JR-Kyushu.KyushuShinkansen"]),
+    ("320", "西九州新幹線", "91120320",
+     ["JR-Kyushu.NishiKyushuShinkansen"]),
+    ("500", "福北ゆたか線", "91101270",
+     ["JR-Kyushu.FukuhokuYutaka", "JR-Kyushu.ChikuhoMain"]),
     ("600", "鹿児島本線", "91101380",
      ["JR-Kyushu.KagoshimaMain", "JR-Kyushu.KagoshimaMainSouth"]),
-    ("601", "鹿児島本線", "91101380",
+    ("601", "鹿児島本線", "91401250",
      ["JR-Kyushu.KagoshimaMainSouth", "JR-Kyushu.KagoshimaMain"]),
 ]
 
