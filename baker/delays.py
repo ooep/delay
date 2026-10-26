@@ -678,35 +678,32 @@ def bake(source, data_dir):
                     )
                     match_method = "position" if leg else None
                 if not leg and (t.get("_station_keys") or (t.get("_station") and t.get("_line_ja"))):
-                    # last resort - suki-direct: for lines whose dokorail
-                    # timetable is an empty shell (shinkansen bundles),
-                    # match straight against suki trains on the line that
-                    # contain the reported station; direction from the feed
-                    # number's parity (odd = 下り) checked against the
-                    # entry's terminal order, stop-count bucket from type.
-                    # Multi-fragment position text ("栗林～屋島") tries each
-                    # fragment in order (jrshikoku's _station_keys).
-                    hint_rails = railways_hint or [
-                        r for r in titles.get(t["_line_ja"], [])
-                        if r.startswith(op + ".")
-                    ]
-                    has_legs = any(store.railway_legs(r) for r in hint_rails)
-                    if not has_legs:
-                        num = str(t.get("odpt:trainNumber") or "")
-                        direction = None
-                        if num.isdigit():
-                            direction = "down" if int(num) % 2 else "up"
-                        direct = None
-                        for station in (t.get("_station_keys") or [t.get("_station")]):
-                            if not station:
-                                continue
-                            direct = suki_index.match_direct(
-                                t["_line_ja"], station, direction,
-                                entry.get("type"), top=32,
-                            )
-                            if direct:
-                                break
+                    # last resort - suki-direct: match straight against suki
+                    # trains on the line that contain the reported station;
+                    # direction from the feed number's parity (odd = 下り)
+                    # checked against the entry's terminal order, stop-count
+                    # bucket from type. Runs even when dokorail legs exist: a
+                    # leg that fails number/position matching must still fall
+                    # back here instead of being dropped (by_key only accepts
+                    # a unique suki-direct hit, so ambiguity is still
+                    # dropped - 宁漏不误报). Multi-fragment position text
+                    # ("栗林～屋島") tries each fragment in order
+                    # (jrshikoku's _station_keys).
+                    num = str(t.get("odpt:trainNumber") or "")
+                    direction = None
+                    if num.isdigit():
+                        direction = "down" if int(num) % 2 else "up"
+                    direct = None
+                    for station in (t.get("_station_keys") or [t.get("_station")]):
+                        if not station:
+                            continue
+                        direct = suki_index.match_direct(
+                            t["_line_ja"], station, direction,
+                            entry.get("type"), top=32,
+                        )
                         if direct:
+                            break
+                    if direct:
                             entry["suki"] = direct
                             entry["match"] = "suki-direct"
                             # 时刻消歧：无 dokorail 时刻表的线路（新干线等）

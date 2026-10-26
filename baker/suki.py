@@ -87,6 +87,10 @@ TITLE_ALIASES = {
     "鈴鹿線": {"近鉄鈴鹿線", "近畿日本鉄道鈴鹿線"},
     "湯の山線": {"近鉄湯の山線"},
     "けいはんな線": {"けいはんな線", "近畿日本鉄道けいはんな線"},
+    # 瀬戸大橋線 vs 本四備讃線: the same line is named 瀬戸大橋線 by
+    # JR-West (through services) and 本四備讃線 by JR-Shikoku - suki data
+    # uses the JR-Shikoku name
+    "瀬戸大橋線": {"本四備讃線", "瀬戸大橋線"},
 }
 
 # RAILWAY_ALIASES: titles that collide across operators resolve by railway id.
