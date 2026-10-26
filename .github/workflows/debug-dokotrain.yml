@@ -1,0 +1,26 @@
+name: debug-dokotrain
+on: workflow_dispatch
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Runner 出口 IP
+        run: |
+          echo "== ipify =="
+          curl -s --max-time 15 https://api.ipify.org; echo
+          echo "== ipapi =="
+          curl -s --max-time 15 https://ipinfo.io/json | head -c 500; echo
+      - name: doko-train 裸探针
+        run: |
+          echo "== plain GET =="
+          curl -s -i --max-time 20 "https://doko-train.jp/json/trainstatus/lines_status.json" | head -30
+          echo
+          echo "== HEAD =="
+          curl -s -I --max-time 20 "https://doko-train.jp/json/trainstatus/lines_status.json"
+      - name: doko-train 浏览器 UA + Referer
+        run: |
+          echo "== browser UA + Referer =="
+          curl -s -i --max-time 20 "https://doko-train.jp/json/trainstatus/lines_status.json" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" \
+            -H "Referer: https://doko-train.jp/sp/" | head -30
