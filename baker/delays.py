@@ -16,7 +16,7 @@ import re
 import threading
 from pathlib import Path
 
-from . import common, suki, suki_timetable
+from . import common, holidays, suki, suki_timetable
 
 DELAY_THRESHOLD_SECONDS = 60
 MAX_CANDIDATES = 3
@@ -63,11 +63,18 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min, trai
     for c in cands:
         key = str(c["key"])
         stops_n = suki_index._stops_norm[key]
-        if want not in stops_n:
+        # suki names carry prefecture qualifiers (高松(香川県)) while live
+        # feeds report the bare station (高松) - same suffixed-variant rule
+        # as match_direct, inside the line-filtered pool
+        if want not in stops_n and not suki_index._has_pref_suffixed(stops_n, want):
             continue
         if not _type_compatible(stops_n, train_type):
             continue
-        pas = stt.passage_times(key, stops_n, want)
+        anchor = want if want in stops_n else next(
+            s for s in stops_n
+            if s.startswith(want) and s[len(want):].endswith(("都", "道", "府", "県"))
+        )
+        pas = stt.passage_times(key, stops_n, anchor)
         if not pas:
             continue
         near = [p for p in pas if abs(p[0] - est) <= tol]
@@ -495,10 +502,21 @@ def bake(source, data_dir):
     _index_thread.start()
     titles = title_index(lines["lines"])
     now = common.jst_now()
+    today_iso = now.date().isoformat()
+    # JR runs the holiday (Saturday/Sunday/Holiday) timetable on shukujitsu
+    # days too - a Monday national holiday must NOT match against the weekday
+    # timetable. Holidays collapse into the Sunday branch (SaturdayHoliday ->
+    # Holiday -> Saturday order), which is what JR groups actually publish.
+    wkd = now.weekday()
+    if holidays.is_holiday_today(today_iso):
+        wkd = 6
+        print(f"calendar: {today_iso} is a Japanese national holiday -> Holiday timetable")
+    else:
+        print(f"calendar: JST {today_iso} weekday={wkd}")
     suki_index = suki.SukiIndex.load(data_dir)
     # the site's own timetable turns station-sequence candidates into
     # time-verified unique mappings (T.t = tmaps key, T.s[0] = dep minute)
-    stt = suki_timetable.SukiTimetable.load(data_dir, now.weekday())
+    stt = suki_timetable.SukiTimetable.load(data_dir, wkd)
     if stt:
         print(f"suki timetable: {len(stt.runs)} keys from {stt.source_file}")
 
@@ -541,7 +559,7 @@ def bake(source, data_dir):
     # no-legs when the CDN refused it)
     _index_thread.join()
     index = _index_box.get("v", {})
-    store = LegStore(source, index, lines["lines"], now.date().isoformat(), now.weekday(), now.hour * 60 + now.minute)
+    store = LegStore(source, index, lines["lines"], today_iso, wkd, now.hour * 60 + now.minute)
     # Prewarm: collect every railway that may need timetable legs and download
     # the bundles in parallel, so the sequential board walk below hits the
     # LegStore cache instead of serial network fetches (the run's old cost).
@@ -659,13 +677,15 @@ def bake(source, data_dir):
                         upcoming=t.get("_upcoming"),
                     )
                     match_method = "position" if leg else None
-                if not leg and t.get("_station") and t.get("_line_ja"):
+                if not leg and (t.get("_station_keys") or (t.get("_station") and t.get("_line_ja"))):
                     # last resort - suki-direct: for lines whose dokorail
                     # timetable is an empty shell (shinkansen bundles),
                     # match straight against suki trains on the line that
                     # contain the reported station; direction from the feed
                     # number's parity (odd = 下り) checked against the
-                    # entry's terminal order, stop-count bucket from type
+                    # entry's terminal order, stop-count bucket from type.
+                    # Multi-fragment position text ("栗林～屋島") tries each
+                    # fragment in order (jrshikoku's _station_keys).
                     hint_rails = railways_hint or [
                         r for r in titles.get(t["_line_ja"], [])
                         if r.startswith(op + ".")
@@ -676,10 +696,16 @@ def bake(source, data_dir):
                         direction = None
                         if num.isdigit():
                             direction = "down" if int(num) % 2 else "up"
-                        direct = suki_index.match_direct(
-                            t["_line_ja"], t["_station"], direction,
-                            entry.get("type"), top=32,
-                        )
+                        direct = None
+                        for station in (t.get("_station_keys") or [t.get("_station")]):
+                            if not station:
+                                continue
+                            direct = suki_index.match_direct(
+                                t["_line_ja"], station, direction,
+                                entry.get("type"), top=32,
+                            )
+                            if direct:
+                                break
                         if direct:
                             entry["suki"] = direct
                             entry["match"] = "suki-direct"

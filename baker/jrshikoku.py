@@ -21,6 +21,7 @@ timetable legs come from dokorail's bundles via the normal LegStore path.
 """
 
 from . import common
+import re
 
 BASE = "https://train.jr-shikoku.co.jp"
 GATEWAY_URL = BASE + "/g?arg1=train&arg2=train"
@@ -42,6 +43,38 @@ LINE_MAP = {
     "setoohashi": "JR-Shikoku.HonshiBisan",
     "mugi": "JR-Shikoku.Mugi",
 }
+
+# line code -> Japanese line name (the feed only carries codes; the suki /
+# dokorail matchers work on names). HonshiBisan is 本四備讃線 on the
+# JR-Shikoku side (the JR-West feed names the same line 瀬戸大橋線).
+LINE_JA = {
+    "yosan": "予讃線",
+    "uwajima": "予讃線",
+    "uwajima2": "予讃線",
+    "dosan": "土讃線",
+    "koutoku": "高徳線",
+    "tokushima": "徳島線",
+    "naruto": "鳴門線",
+    "seto": "本四備讃線",
+    "setoohashi": "本四備讃線",
+    "mugi": "牟岐線",
+}
+
+_POS_PAREN = re.compile(r"[（(][^（）()]*[）)]")
+
+
+def _station_keys(pos):
+    """Position text -> candidate station names for suki-direct matching.
+
+    The map's Pos strings are free-form: "高松" (a station), "栗林～屋島"
+    (running between two stations), "児島予告窓" / "鬼無予告窓" (approach
+    notice), "端岡～鴨川（下り）" (between + direction). Parse every
+    station-like fragment so the matcher can try each in order."""
+    if not pos:
+        return []
+    text = _POS_PAREN.sub("", str(pos)).strip()
+    text = text.replace("予告窓", "")
+    return [p.strip() for p in re.split(r"[~～]", text) if p.strip()]
 
 
 def _railway(line_code):
@@ -93,6 +126,7 @@ def parse_raw(data):
         raw_type = str(t.get("Type") or "").strip()
         kind, _, nickname = raw_type.partition(":")
         kind = KIND_NAMES.get(kind.strip(), kind.strip()) or None
+        line_code = str(t.get("Line") or t.get("line") or "").split("_")[0]
         entry = {
             "owl:sameAs": f"JR-Shikoku:{railway}.{number}",
             "odpt:railway": "odpt.Railway:" + railway,
@@ -103,6 +137,9 @@ def parse_raw(data):
             "odpt:trainType": kind,
             "odpt:carComposition": None,
             "_station": t.get("Pos") or None,  # human-readable position text
+            "_station_keys": _station_keys(t.get("Pos")),
+            "_line_ja": LINE_JA.get(line_code),
+            "_railways": [railway],
             "_nickname": nickname.strip() or None,
             "_railway": railway,
         }

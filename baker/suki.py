@@ -156,6 +156,22 @@ class SukiIndex:
             out |= TITLE_ALIASES.get(n, set())
         return out
 
+    @staticmethod
+    def _has_pref_suffixed(hay, target):
+        """True when a stop matches target up to a prefecture suffix: suki
+        names come with county qualifiers (高松(香川県)) while live feeds
+        report the bare station (高松). Only evaluated inside the line-filtered
+        candidate pool, so 高松(石川県)/高松(東京都) can never be hit by an
+        ula/Shikoku/other-line target."""
+        if not target:
+            return False
+        for s in hay:
+            if s.startswith(target):
+                rest = s[len(target):]
+                if rest and rest.endswith(("都", "道", "府", "県")):
+                    return True
+        return False
+
     def _is_subsequence(self, needle, hay):
         it = iter(hay)
         return all(any(s == h for h in it) for s in needle)
@@ -210,7 +226,7 @@ class SukiIndex:
         scored = []
         for k in {kk for line in want for kk in self._line_pool.get(line, [])}:
             hay = self._stops_norm[k]
-            if target not in hay:
+            if target not in hay and not self._has_pref_suffixed(hay, target):
                 continue
             if direction == "down" and hay[0] not in north:
                 continue
