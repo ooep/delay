@@ -401,7 +401,7 @@ def bake(source, data_dir):
             if delay is None or delay < DELAY_THRESHOLD_SECONDS:
                 continue
             delayed += 1
-            railway = (t.get("odpt:railway") or "").replace("odpt.Railway:", "")
+            railway = (t.get("odpt:railway") or "").replace("odpt.Railway:", "").replace("odpt:Railway:", "")
             line = lines["lines"].get(railway, {})
             # self-contained operators (JR-Hokkaido) carry their own line
             # name and stop pattern; dokorail-based ones use the catalog
