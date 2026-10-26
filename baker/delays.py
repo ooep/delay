@@ -91,6 +91,60 @@ def _stops_consistent(stops_n, report_station, official):
     return True
 
 
+def _verify_passage(suki_index, stt, cands, origin_station, dep_hhmm, tol=5):
+    """Time-verify suki candidates at the leg's origin station, using each
+    candidate's *passage time there* instead of its own dep minute.
+
+    Through / mid-route trains start at a different station than the leg
+    (204M 辰野始発 vs 7345 松本始発→辰野通過): dep0-based checks misjudge
+    the true candidate by tens of minutes and leave lookalike schedules
+    (21:40/6:16 班次) to be tagged. Returns (verified, rest); verified
+    candidates carry `dep_run` = the passage minute found. 宁漏不误报."""
+    if not dep_hhmm or not origin_station:
+        return [], list(cands)
+    try:
+        h, m = dep_hhmm.split(":")
+        dep_min = int(h) * 60 + int(m)
+    except ValueError:
+        return [], list(cands)
+    want = suki.norm_station(origin_station)
+    verified, rest = [], []
+    for c in cands:
+        key = str(c["key"])
+        stops_n = suki_index._stops_norm.get(key)
+        if not stops_n:
+            rest.append(c)
+            continue
+        # station index: exact match, or the prefecture-suffixed variant
+        # (高松(香川県) vs 高松) used by suki's normalized names
+        if want in stops_n:
+            idx = stops_n.index(want)
+        else:
+            idx = next(
+                (
+                    i
+                    for i, s in enumerate(stops_n)
+                    if s.startswith(want) and s[len(want):].endswith(("都", "道", "府", "県"))
+                ),
+                None,
+            )
+        if idx is None:
+            rest.append(c)
+            continue
+        pas = stt.passage_times(key, stops_n, stops_n[idx])
+        if not pas:
+            rest.append(c)
+            continue
+        best = min((abs(p - dep_min), p) for p, _ in pas)
+        if best[0] <= tol:
+            c2 = dict(c)
+            c2["dep_run"] = f"{best[1] // 60:02d}:{best[1] % 60:02d}"
+            verified.append(c2)
+        else:
+            rest.append(c)
+    return verified, rest
+
+
 def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min, train_type=None, tol=DIRECT_TIME_TOLERANCE_MIN, official=None):
     """严格强匹配:把 suki-direct 多候选按『报告站过站时刻 ≈ 表定時刻』
     收敛。三条硬约束(参考在来線 find_leg 的匹配语义,宁漏不误报):
@@ -819,10 +873,14 @@ def bake(source, data_dir):
                             break
                 if cands and stt:
                     # time-verify: keep only keys that actually run at this
-                    # train's departure minute today; unverified candidates
-                    # trail as fallback (no dep time known / snapshot stale)
+                    # train's departure minute today; through/mid-route
+                    # trains (key origin ≠ leg origin) are checked at their
+                    # passage time at the leg's origin station. by_key below
+                    # only trusts verified entries (宁漏不误报).
                     dep_hhmm = entry.get("scheduled", {}).get("dep")
-                    verified, rest = stt.verify_candidates(cands, dep_hhmm)
+                    verified, rest = _verify_passage(
+                        suki_index, stt, cands, stations[0], dep_hhmm
+                    )
                     if verified:
                         cands = verified + rest
                 if cands:
@@ -846,8 +904,14 @@ def bake(source, data_dir):
             if c.get("direct"):
                 if len(e.get("suki") or []) != 1 or e.get("match") != "suki-direct":
                     continue
-            elif not (c["subseq"] or c.get("fuzzy", 99) <= 1):
-                continue
+            else:
+                if not (c["subseq"] or c.get("fuzzy", 99) <= 1):
+                    continue
+                # 在来線:只写时间验证通过(passage 基准)的候选。未验证的
+                # 候选只是站序相似的别时刻班次——写入会把晚点误标到别的
+                # 列车(204M 曾被写到 21:40 夜车/6:16 早车)。宁漏不误报。
+                if "dep_run" not in c:
+                    continue
             slot = by_key.setdefault(
                 c["key"],
                 {

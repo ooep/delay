@@ -71,6 +71,10 @@ ROUTES = [
      ["JR-Kyushu.Chikuhi"]),
     ("160", "後藤寺線", "91101270",
      ["JR-Kyushu.Gotoji"]),
+    ("120", "日田彦山線", "91401250",
+     []),  # dokorail 无 bundle, raw 上板
+    ("230", "吉都線", "91401250",
+     ["JR-Kyushu.Kitto"]),
     ("600", "鹿児島本線", "91101380",
      ["JR-Kyushu.KagoshimaMain", "JR-Kyushu.KagoshimaMainSouth"]),
     ("601", "鹿児島本線", "91401250",
