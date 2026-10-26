@@ -777,7 +777,7 @@ def bake(source, data_dir):
                             # JR-Central 官方発車順序可用時，以官方表定時刻
                             # 為基準 + 官方停站序列做站序一致性校驗；
                             # 消歧不出 → 保持多候選，by_key 只信單候選 → 不映射
-                            if stt and len(direct) > 1:
+                            if stt and (len(direct) > 1 or official is not None):
                                 official = None
                                 if t.get("_bound") is not None and t.get("_station_code") and t.get("_train_kind"):
                                     try:
