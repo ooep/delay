@@ -178,8 +178,11 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
     for c in cands:
         key = str(c["key"])
         stops_n = suki_index._stops_norm[key]
-        # terminus must match the feed's reported destination - collapses
-        # commuter-line pools (local to 君津 vs rapid to 館山 on 内房線)
+        # terminus must match the feed's reported destination when known -
+        # collapses commuter pools (local to 君津 vs rapid to 館山).
+        # Origin is NOT filtered: live feed may only see a through-service
+        # mid-route (BCD subset of suki's ABCD) - station order is already
+        # guaranteed by match_direct's direction filter.
         if want_dest and stops_n and stops_n[-1] != want_dest:
             continue
         # suki names carry prefecture qualifiers (高松(香川県)) while live
@@ -206,7 +209,9 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
     if not scored:
         return None
     scored.sort(key=lambda x: x[0])
-    if len(scored) >= 2 and scored[1][0] - scored[0][0] <= 2:
+    # Exact time match (gap=0) is unambiguous - take it even if a 2nd
+    # candidate is close. Otherwise require >2 min gap from runner-up.
+    if scored[0][0] > 0 and len(scored) >= 2 and scored[1][0] - scored[0][0] <= 2:
         return None
     gap, cand, key, arrive, dep0 = scored[0]
     if gap > tol:
