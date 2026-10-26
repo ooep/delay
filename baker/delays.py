@@ -652,6 +652,7 @@ def bake(source, data_dir):
         # cluster too (東京メトロ/東急/相鉄系/埼玉/モノレール/りんかい等);
         # without it those operators answer empty, so they stay off the list
         _odpt_ops += [
+            "JR-East",
             "TokyoMetro", "Tokyu", "KantoRailway", "SaitamaRailway",
             "SaitamaTransit", "TWR", "TokyoMonorail", "Rinkai",
             "Yurikamome", "Minatomirai", "Shibayama", "ToyoRapid",
