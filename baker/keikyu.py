@@ -30,7 +30,7 @@ DELAY_THRESHOLD_MIN = 1
 LINE_MAP = {
     1: ("京急本線", "京急本線", ["Keikyu.Main", "Keikyu.Kurihama"]),
     2: ("空港線", "京急空港線", ["Keikyu.Airport", "Keikyu.Main"]),
-    3: ("久里浜線", "京急久里浜線", ["Keikyu.Kurihama"]),
+    3: ("久里浜線", "久里浜線", ["Keikyu.Kurihama"]),
     4: ("逗子線", "逗子線", ["Keikyu.Zushi"]),
     5: ("大師線", "京急大師線", ["Keikyu.Daishi"]),
 }
