@@ -228,7 +228,7 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
 
 
 def _collapse_by_time(stt, suki_index, cands, station, now, delay_min,
-                      tol=10):
+                      tol=10, leg_stops=None):
     """Collapse station-sequence-identical suki candidates (loop lines run
     the same number several times a day: 山手線 G trains, 内房線 repeaters)
     to the unique run whose reported-station passage time ≈ now − delay.
@@ -239,12 +239,25 @@ def _collapse_by_time(stt, suki_index, cands, station, now, delay_min,
     candidate is too far off, the temporally closest one wins - the loop
     position estimate has its own error, and station-sequence ties without
     any time evidence resolve to the run whose schedule best brackets now.
+    `leg_stops` (the feed leg's stop list) adds a direction guard: loop
+    pools contain both directions (11011 外回 vs 11016/10507 内回) and
+    passage time alone can pick the wrong one, so a candidate whose next
+    station after the reported station differs from the leg's is dropped.
     Returns a single-candidate list, or the original list when no unique
     hit."""
     if not stt or not station or len(cands) < 2:
         return cands
     want = suki.norm_station(station)
     est = now.hour * 60 + now.minute - (delay_min or 0)
+    # direction anchor: the leg's next station after the reported one
+    leg_next = None
+    if leg_stops:
+        ln = [suki.norm_station(s) for s in leg_stops]
+        try:
+            i = ln.index(want)
+            leg_next = ln[(i + 1) % len(ln)]
+        except ValueError:
+            leg_next = None
     scored = []
     for c in cands:
         key = str(c["key"])
@@ -259,19 +272,34 @@ def _collapse_by_time(stt, suki_index, cands, station, now, delay_min,
         )
         if anchor is None:
             continue
+        if leg_next is not None:
+            # every occurrence of the reported station must agree with the
+            # leg direction; if none does, this key runs the wrong way
+            ok_dir = False
+            for i, s in enumerate(stops_n):
+                if s == anchor:
+                    nxt = stops_n[(i + 1) % len(stops_n)]
+                    if nxt == leg_next or nxt.startswith(leg_next) or leg_next.startswith(nxt):
+                        ok_dir = True
+                        break
+            if not ok_dir:
+                continue
         pas = stt.passage_times(key, stops_n, anchor)
         if not pas:
             continue
-        best = min((abs(p - est), p) for p, _ in pas)
-        scored.append((best[0], c, best[1]))
+        best = min((abs(p - est), p, d) for p, d in pas)
+        scored.append((best[0], c, best[1], best[2]))
     if not scored:
         return cands
     scored.sort(key=lambda x: x[0])
     if len(scored) >= 2 and scored[1][0] - scored[0][0] <= 2 and scored[0][0] <= tol:
         return cands  # two runs nearly equally close -> ambiguous
-    gap, cand, pmin = scored[0]
+    gap, cand, pmin, dep0 = scored[0]
     c2 = dict(cand)
     c2["dep_run"] = f"{pmin // 60:02d}:{pmin % 60:02d}"
+    # suki 口径的发车分钟(与主站 train.depMin 同基准):by_key 的 dep 决胜
+    # 用它,而不是 dokorail 的 scheduled.dep(字符串,前端 JS 相减变 NaN)
+    c2["dep0"] = dep0
     return [c2]
 
 
@@ -955,6 +983,24 @@ def bake(source, data_dir):
                         cands = suki_index.match(stations, part, railway=railway)
                         if cands:
                             break
+                # 环线线路(山手線等):match() 默认 top=3 按站序差截断,会把
+                # 双圈高频 key(11011/11016,extra=30)挤出候选池,只剩单圈
+                # 低频 key(8356/10245)与部分环(10891/10594)。但主站时刻表
+                # 里的环线列车挂在双圈高频 key 下,收敛到错误 key 会让主站
+                # for('11011') 查不到 → 地图无高亮。检测到候选含环线
+                # (start==end)key 时放大 top 到全池,让双圈 key 进入,
+                # 再由 _collapse_by_time 按报告站 passage 收敛到唯一班次。
+                if cands and any(
+                    (
+                        stops_n := suki_index._stops_norm.get(str(c["key"]))
+                    ) is not None
+                    and len(stops_n) > 1
+                    and stops_n[0] == stops_n[-1]
+                    for c in cands
+                ):
+                    cands = suki_index.match(
+                        stations, suki_line, railway=railway, top=256
+                    )
                 if cands and stt:
                     # time-verify: keep only keys that actually run at this
                     # train's departure minute today; through/mid-route
@@ -975,7 +1021,7 @@ def bake(source, data_dir):
                     if report_station:
                         collapsed = _collapse_by_time(
                             stt, suki_index, cands, report_station,
-                            now, round(delay / 60),
+                            now, round(delay / 60), leg_stops=stations,
                         )
                         if collapsed and len(collapsed) == 1:
                             cands = collapsed
@@ -1033,7 +1079,12 @@ def bake(source, data_dir):
                     "train": e["number"],
                     "line": e["line"],
                     "type": e["type"],
-                    "dep": e.get("scheduled", {}).get("dep"),
+                    # 数字发车分钟(suki dep0 口径),主站 delay-tag.js 用
+                    # |a.dep - train.depMin| 决胜;字符串 HH:MM 在 JS 相减
+                    # 得 NaN,历史 bug:山手線全被 ambiguous 且无法决胜。
+                    "dep": c.get("dep0")
+                    if c.get("dep0") is not None
+                    else _hhmm_min(e.get("scheduled", {}).get("dep")),
                     "score": c["overlap"],
                     "fuzzy": 0 if c.get("subseq") else c.get("fuzzy", 0),
                     "ambiguous": False,
@@ -1042,7 +1093,16 @@ def bake(source, data_dir):
             )
             if slot["train"] != e["number"]:
                 slot["ambiguous"] = True
-                slot["alternatives"].append({"train": e["number"], "line": e["line"], "delay_min": e["delay_min"]})
+                slot["alternatives"].append(
+                    {
+                        "train": e["number"],
+                        "line": e["line"],
+                        "delay_min": e["delay_min"],
+                        "dep": c.get("dep0")
+                        if c.get("dep0") is not None
+                        else _hhmm_min(e.get("scheduled", {}).get("dep")),
+                    }
+                )
     # freshness: for each source, how stale the provider's data was when we
     # fetched it (fetched_at minus the provider's own latest timestamp).
     freshness = {}
