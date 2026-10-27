@@ -266,6 +266,13 @@ class Source:
 
         return keisei.fetch(self)
 
+    def tx_feed(self):
+        """Tsukuba Express external-data trains JSON (baker/tx.py). Offline
+        mode replays the captured tx-trains.json fixture."""
+        from . import tx
+
+        return tx.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))

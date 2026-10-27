@@ -767,6 +767,7 @@ def bake(source, data_dir):
         # its own keyless web API (baker/keikyu.py)
         ("Keikyu", source.keikyu_feed),
         ("Keisei", source.keisei_feed),
+        ("TsukubaExpress", source.tx_feed),
     ]
     _odpt_ops = ["Toei", "Tobu", "YokohamaMunicipal"]
     if os.environ.get("ODPT_KEY", "").strip():
