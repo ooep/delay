@@ -206,6 +206,16 @@ def fetch(src=None):
     return {
         "ok": True,
         "fetchedAt": common.jst_now().isoformat(),
+        "source_time": max(
+            (u for u in (
+                t.get("updatedAt")
+                for trains in docs.values()
+                if isinstance(trains, list)
+                for t in trains
+                if isinstance(t, dict)
+            ) if u),
+            default=None,
+        ),
         "body": body,
         "source": "tokyometro app firestore (anonymous)",
     }

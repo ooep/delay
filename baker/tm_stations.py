@@ -165,4 +165,17 @@ STATION_JA = {
     "tokyometro.yoyogiuehara": "\u4ee3\u3005\u6728\u4e0a\u539f",
     "tokyometro.yurakucho": "\u6709\u697d\u753a",
     "tokyometro.zoshigaya": "\u96d1\u53f8\u304c\u8c37",
+    # 直通/常用站 slug 补丁：station_table 提取的 164 站未覆盖这些
+    # App trainList 实际出现的 slug（线上实测收集，2026-10-28）。
+    "tokyometro.azabujuban": "\u9ebb\u5e03\u5341\u756a",
+    "tokyometro.hatogaya": "\u9ce9\u30f6\u8c37",
+    "tokyometro.kiba": "\u6728\u5834",
+    "tokyometro.nishigahara": "\u897f\u30b1\u539f",
+    "tokyometro.nishiya": "\u897f\u8c37",
+    "tokyometro.shimo": "\u5fd7\u8302",
+    "tokyometro.takashimadaira": "\u9ad8\u5cf6\u5e73",
+    "tokyometro.tawaramachi": "\u7530\u539f\u753a",
+    "tokyometro.tokyo": "\u6771\u4eac",
+    "tokyometro.yachiyomidorigaoka": "\u516b\u5343\u4ee3\u7dd1\u304c\u4e18",
+    "tokyometro.yushima": "\u6e6f\u5cf6",
 }
