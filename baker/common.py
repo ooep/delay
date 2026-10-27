@@ -75,6 +75,10 @@ def get_json(url, headers=None, retries=3):
     return json.loads(http_get(url, headers, retries=retries))
 
 
+def get_text(url, headers=None, retries=3):
+    return http_get(url, headers, retries=retries).decode("utf-8", "replace")
+
+
 def jst_now():
     return datetime.now(JST)
 
@@ -91,6 +95,9 @@ class Offline:
 
     def get_json(self, name):
         return json.loads((self.root / name).read_text())
+
+    def get_text(self, name):
+        return (self.root / name).read_text(encoding="utf-8", errors="replace")
 
 
 class Source:
@@ -300,6 +307,14 @@ class Source:
         from . import sotetsu
 
         return sotetsu.fetch(self)
+
+    def tokyo_metro_feed(self):
+        """Tokyo Metro keyless line-level status pages (baker/tokyometro_unkou.py).
+        Works with no ODPT key; needs TOKYOMETRO_BASE reverse proxy when Akamai
+        blocks runner IPs. Offline replays the captured tm-<slug>.html fixtures."""
+        from . import tokyometro_unkou
+
+        return tokyometro_unkou.fetch(self)
 
     def odakyu_feed(self):
         """Odakyu WebView native JSON API (baker/odakyu.py). Offline mode
