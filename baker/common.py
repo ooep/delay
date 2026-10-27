@@ -301,6 +301,13 @@ class Source:
 
         return sotetsu.fetch(self)
 
+    def odakyu_feed(self):
+        """Odakyu WebView native JSON API (baker/odakyu.py). Offline mode
+        replays the captured odakyu-trains.json fixture."""
+        from . import odakyu
+
+        return odakyu.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))

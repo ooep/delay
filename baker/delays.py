@@ -772,6 +772,7 @@ def bake(source, data_dir):
         ("Tokyu-tid", source.tokyu_feed),
         ("Seibu", source.seibu_feed),
         ("Sotetsu", source.sotetsu_feed),
+        ("Odakyu", source.odakyu_feed),
     ]
     _odpt_ops = ["Toei", "Tobu", "YokohamaMunicipal"]
     if os.environ.get("ODPT_KEY", "").strip():
