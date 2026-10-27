@@ -68,8 +68,12 @@ def _page_text(src, base, slug):
         candidates.append(f"{DEFAULT_BASE}/unkou/history/{slug}.html")
     last = None
     for u in candidates:
+        # Hard timeout: direct to tokyometro.jp often hangs on Akamai (TCP
+        # stall, not a clean 403) from runner IPs, which was stalling the
+        # whole bake for 4+ minutes. retries=1 so a dead hop moves on fast.
+        timeout = 8
         try:
-            return common.get_text(u), u
+            return common.get_text(u, retries=1, timeout=timeout), u
         except Exception as exc:  # noqa: BLE001 - any miss degrades a hop
             last = exc
     return None, last
@@ -91,39 +95,53 @@ def _classify(status_text):
 def fetch(src=None):
     src = src or common.Source()
     base = os.environ.get("TOKYOMETRO_BASE", "").strip() or DEFAULT_BASE
-    body = []
     fetched_at = common.jst_now()
-    for slug, ja in LINES:
+
+    def _one(slug_ja):
+        slug, ja = slug_ja
         if src.offline:
             try:
                 html = src.offline.get_text(f"tm-{slug}.html")
             except Exception:
-                continue
+                return None
         else:
             html, _via = _page_text(src, base, slug)
             if html is None:
                 print(f"tokyometro {slug}: all endpoints failed ({str(_via)[:120]})")
-                continue
+                return None
         if not html:
-            continue
+            return None
         m = _STATE_RE.search(html)
         status_text = _parse_status_text(m.group(2)) if m else ""
         status = _classify(status_text)
         if status == "normal":
-            continue  # board only carries delayed trains
-        body.append(
-            {
-                "owl:sameAs": f"TokyoMetro:{slug}",
-                "odpt:railway": f"odpt.Railway:TokyoMetro.{slug.capitalize()}",
-                "odpt:trainNumber": None,
-                "odpt:delay": DELAY_THRESHOLD_SECONDS,
-                "odpt:trainType": None,
-                "odpt:fromStation": None,
-                "odpt:toStation": None,
-                "_line_ja": ja,
-                "_metro_status": status,
-                "_metro_status_text": status_text,
-                "_metro_updated": m.group(1) if m else None,
-            }
-        )
+            return None
+        return {
+            "owl:sameAs": f"TokyoMetro:{slug}",
+            "odpt:railway": f"odpt.Railway:TokyoMetro.{slug.capitalize()}",
+            "odpt:trainNumber": None,
+            "odpt:delay": DELAY_THRESHOLD_SECONDS,
+            "odpt:trainType": None,
+            "odpt:fromStation": None,
+            "odpt:toStation": None,
+            "_line_ja": ja,
+            "_metro_status": status,
+            "_metro_status_text": status_text,
+            "_metro_updated": m.group(1) if m else None,
+        }
+
+    # 9 lines concurrent, but bound the whole feed: worst-case per line is
+    # direct(8s)+allorigins(6s)+codetabs(6s)=20s; give a little headroom so
+    # the whole feed never holds up the bake主体.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    body = []
+    with ThreadPoolExecutor(max_workers=9) as ex:
+        futs = {ex.submit(_one, s): s for s in LINES}
+        for f in as_completed(futs, timeout=25):
+            try:
+                r = f.result()
+            except Exception:
+                r = None
+            if r is not None:
+                body.append(r)
     return {"ok": True, "body": body, "fetchedAt": fetched_at.isoformat()}
