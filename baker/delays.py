@@ -17,6 +17,7 @@ import threading
 from pathlib import Path
 
 from . import common, holidays, suki, suki_timetable, jrcentral
+from . import tokyometro_firestore
 
 DELAY_THRESHOLD_SECONDS = 60
 MAX_CANDIDATES = 3
@@ -780,6 +781,9 @@ def bake(source, data_dir):
         # Tokyo Metro keyless line-level status (no ODPT key needed; with
         # ODPT_KEY the odpt feed below already carries per-train real data)
         ("TokyoMetro", source.tokyo_metro_feed),
+        # Tokyo Metro per-train positions + delays from the App's anonymous
+        # Cloud Firestore (tokyometro/{lineId}); Toei 4 lines stay on odpt.py
+        ("TokyoMetro", source.tokyo_metro_trains_feed),
     ]
     _odpt_ops = ["Toei", "Tobu", "YokohamaMunicipal"]
     if os.environ.get("ODPT_KEY", "").strip():

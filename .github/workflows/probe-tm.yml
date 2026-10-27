@@ -1,42 +1,50 @@
-name: probe-tokyometro-fixture
+name: bake-compat-test
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/probe-tm.yml']
+    paths: ['.github/workflows/probe-tm.yml', 'baker/common.py', 'baker/delays.py', 'baker/tokyometro_firestore.py', 'baker/tm_stations.py']
 jobs:
-  probe:
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ODPT_KEY: ${{ secrets.ODPT_KEY }}
+      DOKORAIL_BASE: "https://dokorail-proxy.vercel.app"
     steps:
-      - name: Dump fixture
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Full bake into temp dir (no commit, no repo pollution)
         shell: bash
         run: |
           set -e
-          KEY="AIzaSyB_uHi1BV4pyknzJ_QGk1XrsaiLa4e12IQ"
-          IDT=$(curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY" -H 'Content-Type: application/json' -d '{"returnSecureToken":true}' | python3 -c "import sys,json;print(json.load(sys.stdin).get('idToken',''))")
-          echo "IDT len: ${#IDT}"
-          mkdir -p /tmp/fx
-          for id in ginza marunouchi hibiya tozai chiyoda yurakucho hanzomon namboku fukutoshin asakusa mita shinjuku oedo; do
-            curl -s --max-time 15 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents/tokyometro/$id" -H "Authorization: Bearer $IDT" -o /tmp/fx/$id.json
-          done
-          python3 -c "
-          import json,glob,os,base64
-          out={}
-          for p in sorted(glob.glob('/tmp/fx/*.json')):
-              lid=os.path.basename(p)[:-5]
-              d=json.load(open(p))
-              if 'error' in d:
-                  out[lid]={'error':d['error'].get('message','')}
-                  continue
-              f=d.get('fields',{})
-              tl=f.get('trainList',{}).get('stringValue','[]')
-              try:
-                  out[lid]=json.loads(tl)
-              except Exception as e:
-                  out[lid]={'parse_error':str(e)[:80]}
-          raw=json.dumps(out,ensure_ascii=False).encode()
-          b=base64.b64encode(raw).decode()
-          print('B64LEN',len(b),'TOTAL',sum(len(v) for v in out.values() if isinstance(v,list)))
-          for i in range(0,len(b),8000):
-              print(b[i:i+8000])
-          "
+          cp -r data /tmp/baketest
+          python -m baker.delays --data-dir /tmp/baketest
+          python3 - << 'PY'
+          import json
+          from collections import Counter
+          d = json.load(open('/tmp/baketest/delays.json'))
+          old = json.load(open('data/delays.json'))
+          tm = [t for t in d['trains'] if t['op'] == 'TokyoMetro']
+          oldtm = [t for t in old['trains'] if t['op'] == 'TokyoMetro']
+          print('=== FULL BAKE (temp dir, no commit) ===')
+          print('delayed_count new:', d['delayed_count'], '| old:', old['delayed_count'])
+          print('by_op new:', dict(Counter(t['op'] for t in d['trains'])))
+          print('by_op old:', dict(Counter(t['op'] for t in old['trains'])))
+          print('=== TokyoMetro per-train layer (NEW) ===')
+          print('TM trains:', len(tm), '| old:', len(oldtm))
+          for t in tm[:12]:
+              s = t.get('scheduled', {})
+              print('  ', t['number'], t['line'], 'delay', t['delay_min'], '|', t.get('from'), '>', t.get('to'), '| match', t.get('match'), '| dep', s.get('dep'))
+          print('TM single-cand:', sum(1 for t in tm if len(t.get('suki', [])) == 1))
+          print('TM with scheduled:', sum(1 for t in tm if t.get('scheduled')))
+          print('sukijr keys new:', len(d['by_suki_key']), '| old:', len(old['by_suki_key']))
+          # regression check: non-TM ops must not drop out entirely
+          old_ops = set(t['op'] for t in old['trains'])
+          new_ops = set(t['op'] for t in d['trains'])
+          print('ops present in old but missing in new:', sorted(old_ops - new_ops) or 'NONE')
+          PY

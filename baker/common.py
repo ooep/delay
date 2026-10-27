@@ -265,6 +265,14 @@ class Source:
 
         return odpt.fetch(self, operator)
 
+    def tokyo_metro_trains_feed(self):
+        """Tokyo Metro per-train feed (baker/tokyometro_firestore.py) from
+        the App's anonymous Cloud Firestore. Offline mode replays the
+        tokyometro-trains.json fixture."""
+        from . import tokyometro_firestore
+
+        return tokyometro_firestore.fetch(self)
+
     def keikyu_feed(self):
         """Keikyu app-kq.net position JSON (baker/keikyu.py). Offline mode
         replays the captured kq-train.json fixture."""
