@@ -243,15 +243,19 @@ class SukiIndex:
         # 跨线全程车(東京→博多 のぞみ 等)始发站可能是任一北端(東京/新大阪/博多),
         # 方向判断用全线北端并集,不能用本线路北端(否则漏掉跨线下行车)
         north = set().union(*self.NORTH_TERMINALS.values())
+        # 方向过滤仅对 NORTH_TERMINALS 有定义的线路（新干线跨线车）启用；
+        # 私铁/通勤线（TX・東武・京成等）北端不在该表，硬过滤会误杀全部候选，
+        # 交给下游 resolve_direct_by_time 用表定时刻+终点站收敛。
+        has_north_scope = any(line in self.NORTH_TERMINALS for line in want)
         lo, hi = self.TYPE_STOP_BUCKETS.get(train_type or "", (0, 99))
         scored = []
         for k in {kk for line in want for kk in self._line_pool.get(line, [])}:
             hay = self._stops_norm[k]
             if target not in hay and not self._has_pref_suffixed(hay, target):
                 continue
-            if direction == "down" and hay[0] not in north:
+            if has_north_scope and direction == "down" and hay[0] not in north:
                 continue
-            if direction == "up" and hay[-1] not in north:
+            if has_north_scope and direction == "up" and hay[-1] not in north:
                 continue
             if not (lo <= len(hay) <= hi):
                 continue
