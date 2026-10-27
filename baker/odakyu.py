@@ -66,6 +66,20 @@ def _direction_code(dest, ud):
     return 2  # 本线小田原方面（含区间终点本厚木/町田/成城等）
 
 
+def _suki_line_for(sched, dest):
+    """Map odakyu train to the suki timetable line pool name.
+    suki_index uses: 小田原線(本線230列) / 小田急江ノ島線(27列) / 多摩線(16列).
+    Detect via stops content (江之岛线 stops 大和/藤沢/片瀬江ノ島;
+    多摩线 stops 唐木田/小田急多摩センター)."""
+    stops = (sched or {}).get("stops") or []
+    text = " ".join(stops + [dest or ""])
+    if any(k in text for k in ("片瀬江ノ島", "藤沢", "湘南台", "大和")):
+        return "小田急江ノ島線"
+    if "唐木田" in text or "多摩センター" in text:
+        return "多摩線"
+    return "小田原線"
+
+
 def _secs_hhmm(secs):
     """unix-seconds-from-midnight -> 'HH:MM'（小田急时刻口径）"""
     try:
@@ -162,14 +176,20 @@ def fetch(src=None):
             "odpt:delay": delay_min * 60,
             "odpt:trainType": TRAIN_TYPE.get(t.get("train_type")),
             "_line_ja": "小田急",
-            "_suki_line": "小田急線",
+            "_suki_line": _suki_line_for(sched, dest),
             "_station": station,
             "_dest": dest or None,
             "_direction": "上り" if ud == "01" else "下り",
             "_number_prefix": number or None,
         }
         if sched:
-            rec["_sched"] = sched
+            # _sched 暂不输出：delays.py 的 sched 分支走 suki_index.match(stops)
+            # + 时间验证，但剩余区段 stops（2-4 站）的时间验证在 runner 上
+            # 全部被过滤（dep_hhmm=剩余首站时刻，_verify_passage 不匹配），
+            # 导致 cands=0、match=None。改为走 else 分支的 suki-direct
+            # （_station  membership + direction），像相鉄一样 match=suki-direct。
+            # 停站表已缓存在 sched 里，后续可接入看板展示。
+            pass
         body.append(rec)
     return {
         "ok": True,
