@@ -177,7 +177,9 @@ def fetch(src=None):
                 "_station": station,
                 "_dest": tr["dest"],
                 "_direction": _direction(tr["dest"]),
-                "_sched": {"stops": stops},
+                # No _sched: providing it routes into the self-contained branch
+                # and skips suki matching. The feed's own timetable rides in
+                # _official, which the suki-direct matcher consumes to anchor.
                 "_official": off,
             })
     return {
