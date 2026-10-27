@@ -20,7 +20,7 @@ jobs:
             curl -s --max-time 15 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents/tokyometro/$id" -H "Authorization: Bearer $IDT" -o /tmp/fx/$id.json
           done
           python3 -c "
-          import json,glob,os
+          import json,glob,os,base64
           out={}
           for p in sorted(glob.glob('/tmp/fx/*.json')):
               lid=os.path.basename(p)[:-5]
@@ -31,13 +31,12 @@ jobs:
               f=d.get('fields',{})
               tl=f.get('trainList',{}).get('stringValue','[]')
               try:
-                  trains=json.loads(tl)
-                  print(lid, len(trains))
-                  out[lid]=trains
+                  out[lid]=json.loads(tl)
               except Exception as e:
                   out[lid]={'parse_error':str(e)[:80]}
-          json.dump(out, open('/tmp/fixture_all.json','w'), ensure_ascii=False)
-          print('fixture bytes:', os.path.getsize('/tmp/fixture_all.json'))
+          raw=json.dumps(out,ensure_ascii=False).encode()
+          b=base64.b64encode(raw).decode()
+          print('B64LEN',len(b),'TOTAL',sum(len(v) for v in out.values() if isinstance(v,list)))
+          for i in range(0,len(b),8000):
+              print(b[i:i+8000])
           "
-          echo "== base64 head =="
-          base64 -w0 /tmp/fixture_all.json | head -c 150
