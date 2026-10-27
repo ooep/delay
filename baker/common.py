@@ -26,7 +26,7 @@ TRAIN_SEARCH_HEADER = {"X-Train-Search": "1"}  # /api/* rejects calls without it
 PAREN_RE = re.compile(r"\s*[(（].*$")  # strip line-name section suffixes
 
 
-def http_get(url, headers=None, retries=3, timeout=30):
+def http_get(url, headers=None, retries=3, timeout=30, data=None, method=None):
     # datacenter IPs with the default Python-urllib UA get challenged by
     # Cloudflare/Akamai on dokorail and the JR sites - always look like a
     # browser; per-call headers still take precedence
@@ -36,7 +36,10 @@ def http_get(url, headers=None, retries=3, timeout=30):
     last = None
     for attempt in range(retries):
         try:
-            req = urllib.request.Request(url, headers=base)
+            req = urllib.request.Request(
+                url, headers=base, data=data,
+                method=method or ("POST" if data is not None else None),
+            )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = resp.read()
                 if resp.headers.get("Content-Encoding") == "gzip":
@@ -50,7 +53,10 @@ def http_get(url, headers=None, retries=3, timeout=30):
                     ctx = ssl.create_default_context()
                     ctx.check_hostname = False
                     ctx.verify_mode = ssl.CERT_NONE
-                    req = urllib.request.Request(url, headers=base)
+                    req = urllib.request.Request(
+                        url, headers=base, data=data,
+                        method=method or ("POST" if data is not None else None),
+                    )
                     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
                         data = resp.read()
                         if resp.headers.get("Content-Encoding") == "gzip":
@@ -71,8 +77,8 @@ def http_get(url, headers=None, retries=3, timeout=30):
     raise last
 
 
-def get_json(url, headers=None, retries=3):
-    return json.loads(http_get(url, headers, retries=retries))
+def get_json(url, headers=None, retries=3, data=None, method=None):
+    return json.loads(http_get(url, headers, retries=retries, data=data, method=method))
 
 
 def get_text(url, headers=None, retries=3, timeout=30):
@@ -309,12 +315,14 @@ class Source:
         return sotetsu.fetch(self)
 
     def tokyo_metro_feed(self):
-        """Tokyo Metro keyless line-level status pages (baker/tokyometro_unkou.py).
-        Works with no ODPT key; needs TOKYOMETRO_BASE reverse proxy when Akamai
-        blocks runner IPs. Offline replays the captured tm-<slug>.html fixtures."""
-        from . import tokyometro_unkou
+        """Tokyo Metro keyless line-level status, official App API
+        (baker/tokyometro_app.py, reverse-engineered from 東京メトロmy!アプリ
+        v7.2.0). Anonymous register -> JWT -> /v7/app/home, covers all 9
+        東京メトロ + 4 都営 lines, works from runner IPs with no key and no
+        proxy. Per-train positions still need ODPT_KEY (odpt.py)."""
+        from . import tokyometro_app
 
-        return tokyometro_unkou.fetch(self)
+        return tokyometro_app.fetch(self)
 
     def odakyu_feed(self):
         """Odakyu WebView native JSON API (baker/odakyu.py). Offline mode
