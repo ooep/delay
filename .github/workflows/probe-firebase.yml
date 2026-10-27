@@ -18,6 +18,12 @@ jobs:
           echo "=== 2) Firebase Remote Config REST ==="
           curl -sk -m 30 -X POST "https://firebaseremoteconfig.googleapis.com/v1/projects/mapp-91687/namespaces/firebase:fetchRemoteConfig?key=AIzaSyB_uHi1BV4pyknzJ_QGk1XrsaiLa4e12IQ" -H "Content-Type: application/json" -d '{"app_instance_id":"probe-0000-0000-0000-000000000001","app_instance_id_token":"probe-token","app_id":"1:110294926089:android:f496575c8a294c884789d8"}' -w " [HTTP %{http_code}]\n" | head -c 3000
           echo
+          echo "=== 2b) Remote Config project ids ==="
+          for pid in mapp-91687 tokyometro-myapp tokyometroapp tokyometrods; do
+            echo "--- project $pid"
+            curl -sk -m 20 -X POST "https://firebaseremoteconfig.googleapis.com/v1/projects/$pid/namespaces/firebase:fetchRemoteConfig?key=AIzaSyB_uHi1BV4pyknzJ_QGk1XrsaiLa4e12IQ" -H "Content-Type: application/json" -d '{"app_instance_id":"probe-0000-0000-0000-000000000001","app_instance_id_token":"probe-token","app_id":"1:110294926089:android:f496575c8a294c884789d8"}' | head -c 400
+            echo
+          done
           echo "=== 3) navitime train-location pages ==="
           for u in "https://trains.navitime.jp/" "https://www.navitime.co.jp/" "https://zaisen.navitime.jp/"; do
             echo "--- $u"
