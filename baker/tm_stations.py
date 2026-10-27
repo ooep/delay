@@ -168,6 +168,7 @@ STATION_JA = {
     # 直通/常用站 slug 补丁：station_table 提取的 164 站未覆盖这些
     # App trainList 实际出现的 slug（线上实测收集，2026-10-28）。
     "tokyometro.azabujuban": "\u9ebb\u5e03\u5341\u756a",
+    "tokyometro.akasaka": "\u8d64\u5742",
     "tokyometro.hatogaya": "\u9ce9\u30f6\u8c37",
     "tokyometro.kiba": "\u6728\u5834",
     "tokyometro.nishigahara": "\u897f\u30b1\u539f",
