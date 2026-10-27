@@ -51,17 +51,21 @@ jobs:
           python-version: "3.12"
 
       - name: Replay yesterday's delay history from git
-        run: python -m baker.history_collector --data-dir data
+        run: |
+          REPLAY_DATE=$(TZ=Asia/Tokyo date -d "yesterday" +%Y-%m-%d)
+          echo "replay_date=$REPLAY_DATE"
+          python -m baker.history_collector --data-dir data --replay-date "$REPLAY_DATE"
 
       - name: Commit if changed
         run: |
+          REPLAY_DATE=$(TZ=Asia/Tokyo date -d "yesterday" +%Y-%m-%d)
           git config user.name "history[bot]"
           git config user.email "history@users.noreply.github.com"
           git add data/delay-history
           if git diff --cached --quiet; then
             echo "history unchanged"
           else
-            git commit -m "delay-history: $(TZ=Asia/Tokyo date +'%Y-%m-%d') service day"
+            git commit -m "delay-history: $REPLAY_DATE service day"
             # bake is idle during the maintenance window; still guard
             # against a concurrent manual dispatch.
             for i in 1 2 3; do
