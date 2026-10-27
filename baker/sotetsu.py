@@ -19,11 +19,18 @@ Mapping (verified vs captured lines.json + lines.json in data/):
     lineId 100/311-324 (through operators) -> skipped (no dokorail railway
         in our lines.json; flagged in the test report).
 
-NOTE: operations returned HTTP 400 (empty body, Cowboy) from this sandbox's
-egress on 2026-10-27 despite /lines answering 200 - method/headers/query
-probed exhaustively. Live path returns None until re-verified from the
-Actions runner; offline fixtures replay the same parser. Conditional GET
-(If-None-Match) is intentionally NOT used - plain GET keeps the runner simple.
+NOTE: operations returns HTTP 400 (empty body, Cowboy) - verified from this
+sandbox AND from the GitHub Actions runner (bake log 2026-10-27T07:55Z),
+so it is not an IP block. Exhaustively probed 2026-10-27: every query
+variant (lineId/line_id/stationId/...), every header guess (x-app-version-*
+1.6.2 per the response's own x-required-app-version-*, x-popinfo-id,
+Origin/Referer, HTTP/1.1, full SPA header set), and v1/v2 path alternates -
+/lines stays 200 with the very same request shape. APK base split carries
+only the iridge popinfo SDK (business dex unavailable); leading hypothesis
+is the endpoint requires a server-registered popinfo device id. Through
+services (東急直通) are already covered by baker/tokyu.py. Live path
+returns None until the endpoint is re-discovered; offline fixtures replay
+the same parser. Conditional GET (If-None-Match) is intentionally NOT used.
 """
 
 from . import common
