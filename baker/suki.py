@@ -148,12 +148,18 @@ class SukiIndex:
     @classmethod
     def load(cls, data_dir):
         root = Path(data_dir) / "suki"
-        return cls(
-            json.loads((root / "tmaps.json").read_text()),
-            json.loads((root / "lines_map.json").read_text())
-            if (root / "lines_map.json").exists()
-            else None,
-        )
+        try:
+            tmaps = json.loads((root / "tmaps.json").read_text())
+            lines_map = None
+            if (root / "lines_map.json").exists():
+                lines_map = json.loads((root / "lines_map.json").read_text())
+            return cls(tmaps, lines_map)
+        except Exception as exc:
+            # tmaps.json 缺失 / JSON 损坏 / schema 变化（s_jas/lines 字段缺失）:
+            # 降级为空索引，bake 宁漏不崩（对齐 SukiTimetable.load 的失败语义）。
+            print(f"suki tmaps load failed ({type(exc).__name__}: {str(exc)[:100]}); "
+                  f"baking with empty index (no suki 1:1 this run)")
+            return cls({}, None)
 
     def _expand(self, names, railway=None):
         out = set()

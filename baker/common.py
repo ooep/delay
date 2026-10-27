@@ -356,6 +356,14 @@ class Source:
 
         return keio.fetch(self)
 
+    def meitetsu_feed(self):
+        """Meitetsu train-running-position HTML pages (baker/meitetsu.py).
+        Server-rendered per-train popups; delayed trains only. Offline mode
+        replays the captured mt-*.html fixtures."""
+        from . import meitetsu
+
+        return meitetsu.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))

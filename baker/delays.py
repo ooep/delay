@@ -778,6 +778,8 @@ def bake(source, data_dir):
         # keyless; position/congestion stays in osakametro-congestion.json)
         ("OsakaMetro", source.osakametro_feed),
         ("Keio", source.keio_feed),
+        # Meitetsu train-running-position HTML pages (keyless, server-rendered)
+        ("Meitetsu", source.meitetsu_feed),
         # Tokyo Metro keyless line-level status (no ODPT key needed; with
         # ODPT_KEY the odpt feed below already carries per-train real data)
         ("TokyoMetro", source.tokyo_metro_feed),
