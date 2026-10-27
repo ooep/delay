@@ -156,6 +156,16 @@ def fetch(src=None):
             if key in seen:
                 continue
             seen.add(key)
+            # Official scheduled timetable -> time-anchored suki disambiguation
+            # (resolve_direct_by_time expects _official = {departure, stations,
+            # terminal} and _sched.stops; without these the multi-candidate
+            # suki-direct pool stays ambiguous and is dropped 宁漏不误报).
+            off = None
+            if stops:
+                hh, mm = stops[0]["dep"].split(":")
+                off = {"departure": int(hh) * 60 + int(mm),
+                       "stations": [s["name"] for s in stops],
+                       "terminal": tr["dest"]}
             body.append({
                 "owl:sameAs": f"Meitetsu:{line}:{station}:{tr['dest']}",
                 "odpt:railway": f"odpt.Railway:Meitetsu.{line}",
@@ -167,7 +177,8 @@ def fetch(src=None):
                 "_station": station,
                 "_dest": tr["dest"],
                 "_direction": _direction(tr["dest"]),
-                "_scheduled": {"stops": stops},
+                "_sched": {"stops": stops},
+                "_official": off,
             })
     return {
         "ok": True,
