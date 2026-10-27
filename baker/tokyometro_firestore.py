@@ -96,8 +96,6 @@ _TOKEN_TTL = 50 * 60  # idToken expires ~1h; refresh comfortably before
 
 from .tm_stations import STATION_JA  # noqa: E402
 
-_LOADED_TIMES = {}
-
 
 def _station_ja(slug):
     """Station slug (tokyometro.ueno / bare nishimagome) -> ja name."""
@@ -145,7 +143,6 @@ def _load_docs(src):
     if not tok:
         return None
     out = {}
-    times = {}
     for lid in _LINE_IDS:
         try:
             doc = common.get_json(
@@ -161,12 +158,6 @@ def _load_docs(src):
             out[lid] = json.loads(tl)
         except json.JSONDecodeError:
             continue
-        # provider's own data timestamp lives at document level
-        # (fields.updatedAt), not per train item
-        times[lid] = (
-            doc.get("fields", {}).get("updatedAt", {}).get("stringValue") or None
-        )
-    globals()["_LOADED_TIMES"] = times
     return out
 
 
@@ -215,9 +206,10 @@ def fetch(src=None):
     return {
         "ok": True,
         "fetchedAt": common.jst_now().isoformat(),
-        "source_time": max(
-            (u for u in _LOADED_TIMES.values() if u), default=None
-        ),
+        # App 文档级 fields.updatedAt 实测为空（probe5: 'updatedAt: '），
+        # 数据源不提供有效 provider 时间戳 → 如实 None（freshness 显示
+        # lag unknown，与 odpt 之外的无时间戳 feed 一致）
+        "source_time": None,
         "body": body,
         "source": "tokyometro app firestore (anonymous)",
     }

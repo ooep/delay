@@ -169,10 +169,12 @@ STATION_JA = {
     # App trainList 实际出现的 slug（线上实测收集，2026-10-28）。
     "tokyometro.azabujuban": "\u9ebb\u5e03\u5341\u756a",
     "tokyometro.akasaka": "\u8d64\u5742",
+    "tokyometro.ginzaitchome": "\u9280\u5ea7\u4e00\u4e01\u76ee",
     "tokyometro.hatogaya": "\u9ce9\u30f6\u8c37",
     "tokyometro.kiba": "\u6728\u5834",
     "tokyometro.nishigahara": "\u897f\u30b1\u539f",
     "tokyometro.nishiya": "\u897f\u8c37",
+    "tokyometro.sakuradamon": "\u685c\u7530\u9580",
     "tokyometro.shimo": "\u5fd7\u8302",
     "tokyometro.takashimadaira": "\u9ad8\u5cf6\u5e73",
     "tokyometro.tawaramachi": "\u7530\u539f\u753a",
