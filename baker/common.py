@@ -243,6 +243,219 @@ class Source:
 
         return hanshin.fetch(self)
 
+    def hankyu_feed(self):
+        """Hankyu train-running positions from the 阪急沿線アプリ API
+        (baker/hankyu.py), keyless static x-auth-token. Offline mode
+        replays the captured station master + line position fixtures."""
+        from . import hankyu
+
+        return hankyu.fetch(self)
+
+    # --- jrstatus batch (Wave1A/B/C + Wave3 Tokyo Glance) ---
+    def aonami_feed(self):
+        """Aonami Line (あおなみ線) running-position markers (baker/aonami.py)."""
+        from . import aonami
+
+        return aonami.fetch(self)
+
+    def aikan_feed(self):
+        """Aichi Loop Railway (愛環) zaisen info page (baker/aikan.py)."""
+        from . import aikan
+
+        return aikan.fetch(self)
+
+    def hokuhoku_feed(self):
+        """Hokuhoku Express (北越急行ほくほく線) running-guide table (baker/hokuhoku.py)."""
+        from . import hokuhoku
+
+        return hokuhoku.fetch(self)
+
+    def ainokaze_feed(self):
+        """Ainokaze Toyama Railway ODPT-style train JSON (baker/ainokaze.py)."""
+        from . import ainokaze
+
+        return ainokaze.fetch(self)
+
+    def hapiline_feed(self):
+        """Hapi-Line Fukui train-location page (baker/hapiline.py)."""
+        from . import hapiline
+
+        return hapiline.fetch(self)
+
+    def ishikawa_feed(self):
+        """IR Ishikawa Railway ODPT trains API (baker/ishikawa.py)."""
+        from . import ishikawa
+
+        return ishikawa.fetch(self)
+
+    def igr_feed(self):
+        """IGR Iwate Galaxy Railway jorudan realtime JSON (baker/igr.py)."""
+        from . import igr
+
+        return igr.fetch(self)
+
+    def yamagata_feed(self):
+        """Yamagata Railway Flower Nagai Line positions (baker/yamagata.py)."""
+        from . import yamagata
+
+        return yamagata.fetch(self)
+
+    def fukuoka_subway_feed(self):
+        """Fukuoka City Subway running JSON (baker/fukuoka_subway.py)."""
+        from . import fukuoka_subway
+
+        return fukuoka_subway.fetch(self)
+
+    def kumamoto_tram_feed(self):
+        """Kumamoto City Tram web01List positions (baker/kumamoto.py)."""
+        from . import kumamoto
+
+        return kumamoto.fetch(self)
+
+    def nagasaki_feed(self):
+        """Nagasaki Electric Tramway location_data API (baker/nagasaki.py)."""
+        from . import nagasaki
+
+        return nagasaki.fetch(self)
+
+    def hiroden_feed(self):
+        """Hiroshima Electric Railway per-stop CGI positions (baker/hiroden.py)."""
+        from . import hiroden
+
+        return hiroden.fetch(self)
+
+    def okayama_tram_feed(self):
+        """Okayama Electric Tramway Bus-Vision (Teeda) positions (baker/okayama.py)."""
+        from . import okayama
+
+        return okayama.fetch(self)
+
+    def mizushima_feed(self):
+        """Mizushima Rinkai Railway Bus-Vision (Teeda) positions (baker/mizushima.py)."""
+        from . import mizushima
+
+        return mizushima.fetch(self)
+
+    def manyo_feed(self):
+        """Manyo Line VISH buscatch rt3 positions (baker/manyo.py)."""
+        from . import manyo
+
+        return manyo.fetch(self)
+
+    def toyama_feed(self):
+        """Toyama Chihou Railway VISH buscatch rt3 positions (baker/toyama.py)."""
+        from . import toyama
+
+        return toyama.fetch(self)
+
+    def tosaden_feed(self):
+        """Tosaden Kotsu IchigoMap CSV positions (baker/tosaden.py)."""
+        from . import tosaden
+
+        return tosaden.fetch(self)
+
+    def enoden_feed(self):
+        """Enoshima Electric Railway positions (baker/enoden.py)."""
+        from . import enoden
+
+        return enoden.fetch(self)
+
+    def mizuma_feed(self):
+        """Mizuma Railway positions (baker/mizuma.py)."""
+        from . import mizuma
+
+        return mizuma.fetch(self)
+
+    def hakodate_tram_feed(self):
+        """Hakodate City Tram IchigoMap CSV positions (baker/hakodate.py)."""
+        from . import hakodate
+
+        return hakodate.fetch(self)
+
+    def toyohashi_feed(self):
+        """Toyohashi Railway bus-viewer.jp positions (baker/toyohashi.py)."""
+        from . import toyohashi
+
+        return toyohashi.fetch(self)
+
+    def tg_kanto_feed(self):
+        """Kanto Railway via Tokyo Glance keyless channel (baker/tg_kanto.py)."""
+        from . import tg_kanto
+
+        return tg_kanto.fetch(self)
+
+    def tg_komatsu_feed(self):
+        """Kominato Railway via Tokyo Glance (baker/tg_komatsu.py)."""
+        from . import tg_komatsu
+
+        return tg_komatsu.fetch(self)
+
+    def tg_nagareyama_feed(self):
+        """Ryutetsu (Nagareyama) via Tokyo Glance (baker/tg_nagareyama.py)."""
+        from . import tg_nagareyama
+
+        return tg_nagareyama.fetch(self)
+
+    def tg_yamaman_feed(self):
+        """Yamaman via Tokyo Glance (baker/tg_yamaman.py)."""
+        from . import tg_yamaman
+
+        return tg_yamaman.fetch(self)
+
+    def tg_joshin_feed(self):
+        """Joshin Electric Railway via Tokyo Glance (baker/tg_joshin.py)."""
+        from . import tg_joshin
+
+        return tg_joshin.fetch(self)
+
+    def tg_jomo_feed(self):
+        """Jomo Electric Railway via Tokyo Glance (baker/tg_jomo.py)."""
+        from . import tg_jomo
+
+        return tg_jomo.fetch(self)
+
+    def tg_moka_feed(self):
+        """Moka Railway via Tokyo Glance (baker/tg_moka.py)."""
+        from . import tg_moka
+
+        return tg_moka.fetch(self)
+
+    def tg_watarase_feed(self):
+        """Watarase Keikoku Railway via Tokyo Glance (baker/tg_watarase.py)."""
+        from . import tg_watarase
+
+        return tg_watarase.fetch(self)
+
+    def tg_fujikyu_feed(self):
+        """Fuji Kyuko via Tokyo Glance (baker/tg_fujikyu.py)."""
+        from . import tg_fujikyu
+
+        return tg_fujikyu.fetch(self)
+
+    def tg_sunzu_feed(self):
+        """Izuhakone Railway Sunzu Line via Tokyo Glance (baker/tg_sunzu.py)."""
+        from . import tg_sunzu
+
+        return tg_sunzu.fetch(self)
+
+    def tg_izukyu_feed(self):
+        """Izu Kyuko via Tokyo Glance (baker/tg_izukyu.py)."""
+        from . import tg_izukyu
+
+        return tg_izukyu.fetch(self)
+
+    def tg_hakonetozan_feed(self):
+        """Odakyu Hakone Tozan Railway via Tokyo Glance (baker/tg_hakonetozan.py)."""
+        from . import tg_hakonetozan
+
+        return tg_hakonetozan.fetch(self)
+
+    def tg_rinkai_feed(self):
+        """Tokyo Waterfront Area Rapid Transit (Rinkai Line) via Tokyo Glance (baker/tg_rinkai.py)."""
+        from . import tg_rinkai
+
+        return tg_rinkai.fetch(self)
+
     def kintetsu_feed(self):
         """Kintetsu LocationWeb server-rendered pages (baker/kintetsu.py).
         Offline mode replays captured kt-w*.html fixtures."""
