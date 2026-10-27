@@ -52,6 +52,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Meitetsu trainlocation HTML parser uses BeautifulSoup; all other
+      # operators stay stdlib-only.
+      - name: Install Python deps
+        run: pip install beautifulsoup4
+
       - name: Refresh caches (weekly or when missing)
         run: python -m baker.refresh --data-dir data
 
