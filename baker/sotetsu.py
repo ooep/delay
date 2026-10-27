@@ -1,42 +1,36 @@
-"""Sotetsu (相鉄) live train feed via the native Ktor JSON API.
+"""Sotetsu (相鉄) live train feed.
 
-Endpoints (no key; reverse-engineered 2026-10-27):
-    GET https://api.sotetsuapp.com/api/v2/lines       static master (works
-        from this sandbox; snake_case fields, 12 lines incl. through
-        operators 東急東横線/メトロ/東武東上線/埼京線...).
-    GET https://api.sotetsuapp.com/api/v2/operations   live positions.
+REVISED 2026-10-27: the native Ktor endpoint
+    GET https://api.sotetsuapp.com/api/v2/operations   (also v1)
+returns HTTP 400 with empty body from BOTH this sandbox and the GH Actions
+runner - it is gated on a server-registered popinfo device id that the APK
+base split (iridge popinfo SDK) does not carry. The web frontend
+(www.sotetsuapp.com/lines/main/trains) uses a different, open data host:
 
-operations payload (per prior RE; field naming unknown - lines uses
-snake_case, the RE notes say camelCase, so the parser accepts BOTH):
-    {"operations":[{lineId, stationId, trains:{up:[TimeLine], down:[TimeLine]}}]}
-    TimeLine{time, id(app-internal, NOT a train number), delay(分),
-             kindNameJa, destinationLineId, destinationStationId}
+    GET https://external-data.sotetsuapp.com/tid/trains.json     (live, 200)
 
-Mapping (verified vs captured lines.json + lines.json in data/):
+trains.json record:
+    {"station_id":17, "next_station_id":11, "position":0|1,
+     "direction":"up"|"down", "train_kind_id":7, "delay":1,
+     "train_number":"2083", "operation_number":59,
+     "destination_station_id":19, "line_id":1}
+
+station/destination names come from the static v1 master:
+    GET https://api.sotetsuapp.com/api/v1/lines   (200, 12 lines incl.
+    through operators; stations[].id -> name_ja global map)
+
+Mapping:
     lineId 1 -> 本線            -> odpt.Railway:Sotetsu.Main
     lineId 2 -> いずみ野線      -> odpt.Railway:Sotetsu.Izumino
     lineId 3 -> 新横浜線        -> odpt.Railway:Sotetsu.SotetsuShinYokohama
-    lineId 100/311-324 (through operators) -> skipped (no dokorail railway
-        in our lines.json; flagged in the test report).
-
-NOTE: operations returns HTTP 400 (empty body, Cowboy) - verified from this
-sandbox AND from the GitHub Actions runner (bake log 2026-10-27T07:55Z),
-so it is not an IP block. Exhaustively probed 2026-10-27: every query
-variant (lineId/line_id/stationId/...), every header guess (x-app-version-*
-1.6.2 per the response's own x-required-app-version-*, x-popinfo-id,
-Origin/Referer, HTTP/1.1, full SPA header set), and v1/v2 path alternates -
-/lines stays 200 with the very same request shape. APK base split carries
-only the iridge popinfo SDK (business dex unavailable); leading hypothesis
-is the endpoint requires a server-registered popinfo device id. Through
-services (東急直通) are already covered by baker/tokyu.py. Live path
-returns None until the endpoint is re-discovered; offline fixtures replay
-the same parser. Conditional GET (If-None-Match) is intentionally NOT used.
+    through-operator line_ids (東急/メトロ/東武/西武/埼玉/都営 JR) skipped
+    (no dokorail railway in our lines.json; covered by tokyu.py / JR feeds).
 """
 
 from . import common
 
-LINES_URL = "https://api.sotetsuapp.com/api/v2/lines"
-OPERATIONS_URL = "https://api.sotetsuapp.com/api/v2/operations"
+TID_URL = "https://external-data.sotetsuapp.com/tid/trains.json"
+LINES_URL = "https://api.sotetsuapp.com/api/v1/lines"
 
 DELAY_THRESHOLD_MIN = 1  # only emit delay >= 60 s
 
@@ -47,17 +41,8 @@ LINE_MAP = {
     3: ("Sotetsu.SotetsuShinYokohama", "相鉄新横浜線"),
 }
 
-# module-level cache: station id -> ja name (built from /lines; covers the
-# through-service lines too, which is where destinationStationId points)
+# module-level cache: station id -> ja name (built from v1/lines)
 _STATION_MASTER = None
-
-
-def _g(d, *keys, default=None):
-    """Accept both camelCase (RE notes) and snake_case (observed on /lines)."""
-    for k in keys:
-        if isinstance(d, dict) and d.get(k) is not None:
-            return d[k]
-    return default
 
 
 def _build_master(lines_payload):
@@ -66,7 +51,7 @@ def _build_master(lines_payload):
         for st in line.get("stations") or []:
             sid = st.get("id")
             if sid is not None:
-                master[sid] = st.get("name_ja") or st.get("nameJa")
+                master[sid] = st.get("name_ja")
     return master
 
 
@@ -93,55 +78,54 @@ def fetch(src=None):
     src = src or common.Source()
     if src.offline:
         try:
-            payload = src.offline_json("sotetsu-operations.json")
+            payload = src.offline_json("sotetsu-trains.json")
         except Exception:
             return None
     else:
         try:
-            payload = common.get_json(OPERATIONS_URL)
+            payload = common.get_json(TID_URL)
         except Exception as exc:
-            print(f"sotetsu operations: {type(exc).__name__}: {str(exc)[:120]}")
+            print(f"sotetsu tid: {type(exc).__name__}: {str(exc)[:120]}")
             return None
     master = _load_master(src)
 
     body = []
-    for op in (payload or {}).get("operations") or []:
-        line_id = _g(op, "lineId", "line_id")
+    for tr in (payload or {}).get("trains") or []:
+        if not isinstance(tr, dict):
+            continue
+        line_id = tr.get("line_id")
         railway_id, line_ja = LINE_MAP.get(line_id, (None, None))
         if not railway_id:
-            continue  # through-operator rows (100/311-324) not mapped yet
-        station_id = _g(op, "stationId", "station_id")
-        trains = op.get("trains") or {}
-        for direction, bucket in (("up", trains.get("up") or []),
-                                  ("down", trains.get("down") or [])):
-            for tl in bucket:
-                if not isinstance(tl, dict):
-                    continue
-                try:
-                    delay_min = int(_g(tl, "delay", default=0) or 0)
-                except (TypeError, ValueError):
-                    delay_min = 0
-                if delay_min < DELAY_THRESHOLD_MIN:
-                    continue
-                dest_id = _g(tl, "destinationStationId", "destination_station_id")
-                body.append(
-                    {
-                        "owl:sameAs": f"Sotetsu:{railway_id}.{direction}."
-                        f"{dest_id}.{station_id}",
-                        "odpt:railway": f"odpt.Railway:{railway_id}",
-                        "odpt:trainNumber": None,  # TimeLine.id is app-internal
-                        "odpt:delay": delay_min * 60,
-                        "odpt:trainType": _g(tl, "kindNameJa", "kind_name_ja"),
-                        "_line_ja": line_ja,
-                        "_suki_line": line_ja,
-                        "_station": master.get(station_id),
-                        "_dest": master.get(dest_id),
-                        "_direction": direction,
-                    }
-                )
+            continue  # through-operator rows; covered by other feeds
+        try:
+            delay_min = int(tr.get("delay") or 0)
+        except (TypeError, ValueError):
+            delay_min = 0
+        if delay_min < DELAY_THRESHOLD_MIN:
+            continue
+        direction = tr.get("direction") == "up" and "上り" or "下り"
+        station_id = tr.get("station_id")
+        next_id = tr.get("next_station_id")
+        # 当前位置：station_id 为当前站；若为 null 且 next_station_id 有值，
+        # 说明车已离开上一站、正在站间（用下一站作为报告点）
+        report_station = station_id if station_id is not None else next_id
+        number = str(tr.get("train_number") or "").strip()
+        dest_id = tr.get("destination_station_id")
+        body.append({
+            "owl:sameAs": f"Sotetsu:{railway_id}.{number or next_id}.{report_station}",
+            "odpt:railway": f"odpt.Railway:{railway_id}",
+            "odpt:trainNumber": number or None,
+            "odpt:delay": delay_min * 60,
+            "_line_ja": line_ja,
+            "_suki_line": line_ja,
+            "_station": master.get(report_station),
+            "_dest": master.get(dest_id),
+            "_direction": direction,
+            "_number_prefix": number or None,
+        })
     return {
         "ok": True,
         "fetchedAt": common.jst_now().isoformat(),
         "body": body,
-        "source": "api.sotetsuapp.com/api/v2/operations",
+        "source": "external-data.sotetsuapp.com/tid/trains.json",
     }
