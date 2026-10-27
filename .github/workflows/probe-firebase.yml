@@ -1,0 +1,33 @@
+name: probe-firebase
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: |
+          echo "=== 1) Firebase RTDB public read ==="
+          for p in .json trains.json train_position.json positions.json train.json operation.json zaisen.json; do
+            echo "--- mapp-91687.firebaseio.com/\$p"
+            curl -sk -m 20 "https://mapp-91687.firebaseio.com/\$p" -w " [%{http_code} %{size_download}B]\n" | head -c 400
+            echo
+          done
+          echo "=== 2) Firebase Remote Config REST ==="
+          curl -sk -m 30 -X POST \\
+            "https://firebaseremoteconfig.googleapis.com/v1/projects/mapp-91687/namespaces/firebase:fetchRemoteConfig?key=AIzaSyB_uHi1BV4pyknzJ_QGk1XrsaiLa4e12IQ" \\
+            -H "Content-Type: application/json" \\
+            -d "{\"app_instance_id\":\"probe-0000-0000-0000-000000000001\",\"app_instance_id_token\":\"probe-token\",\"app_id\":\"1:110294926089:android:f496575c8a294c884789d8\"}" \\
+            -w "\n[%{http_code}]\n" | head -c 2000
+          echo
+          echo "=== 3) navitime train-location pages ==="
+          for u in "https://trains.navitime.jp/" "https://www.navitime.co.jp/" "https://zaisen.navitime.jp/" "https://mapscript.cld.navitime.jp/v1/40002130/mapscript?version=3.11"; do
+            echo "--- \$u"
+            curl -sk -m 20 -L -A "Mozilla/5.0" -w " [%{http_code} %{size_download}B]\n" "\$u" | head -c 300
+            echo
+          done
+          echo "=== 4) tokyometroapp web root ==="
+          curl -sk -m 20 -A "Mozilla/5.0" "https://tokyometroapp.cld.navitime.jp/" -w " [%{http_code} %{size_download}B]\n" | head -c 200
+          echo
+        shell: bash
