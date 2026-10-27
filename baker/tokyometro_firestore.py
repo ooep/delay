@@ -63,6 +63,23 @@ _LINE_JA = {
     "fukutoshin": "副都心線",
 }
 
+# suki 时刻表线路名变体（基础名 + suki 实际用名；缺失时 match_direct
+# 查不到池 → 该线兜底漏配）。实测 tmaps lines 标记 2026-10-27：
+#   有楽町線 -> 東京メトロ有楽町線 / 南北線 -> 東京メトロ南北線
+#   東西線 -> 東京メトロ東西線 / 三田線 -> 都営地下鉄三田線
+#   新宿線 -> 都営地下鉄新宿線
+_SUKI_LINE_VARIANTS = {
+    "ginza": ["銀座線"],
+    "marunouchi": ["丸ノ内線"],
+    "hibiya": ["日比谷線"],
+    "tozai": ["東京メトロ東西線", "東西線"],
+    "chiyoda": ["千代田線"],
+    "yurakucho": ["東京メトロ有楽町線", "有楽町線"],
+    "hanzomon": ["半蔵門線"],
+    "namboku": ["東京メトロ南北線", "南北線"],
+    "fukutoshin": ["副都心線"],
+}
+
 # speedClass -> ja (site display + suki type compatibility; unknown -> keep raw)
 _TYPE_JA = {
     "Local": "普通",
@@ -85,6 +102,14 @@ def _station_ja(slug):
     if not slug:
         return None
     return STATION_JA.get(slug) or STATION_JA.get("tokyometro." + slug) or slug
+
+
+def _station_match_ja(slug):
+    """站名 for suki matching: suki tables write 押上 where the App writes
+    押上〈スカイツリー前〉. norm_station only strips ()/（), not 〈〉, so
+    strip the angle-bracket disambiguator here (display keeps the full name
+    via _station_ja)."""
+    return __import__("re").sub(r"\s*〈.*$", "", _station_ja(slug) or "").strip()
 
 
 def _token():
@@ -169,9 +194,10 @@ def fetch(src=None):
                 "odpt:trainType": _TYPE_JA.get(t.get("speedClass"), t.get("speedClass")),
                 "odpt:fromStation": _station_ja(t.get("pastStation")),
                 "odpt:toStation": _station_ja(t.get("endStation")),
-                "_station": _station_ja(t.get("pastStation")),
+                "_station": _station_match_ja(t.get("pastStation")),
                 "_line_ja": _LINE_JA.get(lid) or railway,
-                "_dest": _station_ja(t.get("endStation")),
+                "_suki_pools": _SUKI_LINE_VARIANTS.get(lid, [_LINE_JA.get(lid) or railway]),
+                "_dest": _station_match_ja(t.get("endStation")),
                 "_direction": t.get("direction"),
                 "_pos": t.get("trainPosition"),
                 "_pos_flag": t.get("trainPositionFlag"),

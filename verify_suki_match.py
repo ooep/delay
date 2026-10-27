@@ -106,12 +106,21 @@ def check_feed(name, records, stt, idx, now):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--offline", default=None, help="fixture dir for TokyoMetro")
+    ap.add_argument("--now", default=None,
+                    help="fixture snapshot time (YYYY-MM-DDTHH:MM) to reproduce "
+                         "production disambiguation; defaults to live jst_now")
     args = ap.parse_args()
 
     data_dir = "data"
     idx = suki.SukiIndex.load(data_dir)
     stt = suki_timetable.SukiTimetable.load(data_dir, 1)  # 周二
-    now = common.jst_now()
+    if args.now:
+        import datetime as dt
+        now = dt.datetime.fromisoformat(args.now).astimezone(
+            dt.timezone(dt.timedelta(hours=9)))
+        print("now = %s (fixture snapshot, reproducible)" % now.isoformat())
+    else:
+        now = common.jst_now()
     print("suki_index keys:", len(idx.trains), "| stt keys:", len(stt.runs or {}))
 
     # Odakyu (在线)
