@@ -72,13 +72,20 @@ LINES = {
     "67": {"board": "武蔵野線", "suki": "武蔵野線", "railway": "JR-East.Musashino"},
     "69": {"board": "横須賀線", "suki": "横須賀線", "railway": "JR-East.Yokosuka"},
     "70": {"board": "横浜線", "suki": "横浜線", "railway": "JR-East.Yokohama"},
-    "101": {"board": "成田エクスプレス", "suki": "総武本線", "railway": "JR-East.NaritaExpress"},
+    "101": {"board": "成田エクスプレス", "suki": "成田空港線", "railway": "JR-East.NaritaExpress"},
     "102": {"board": "上野東京ライン", "suki": "東海道本線", "railway": "JR-East.UenoTokyo"},
     "31": {"board": "五日市線", "suki": "五日市線", "railway": "JR-East.Itsukaichi"},
     "32": {"board": "伊東線", "suki": "伊東線", "railway": "JR-East.Ito"},
     "33": {"board": "内房線", "suki": "内房線", "railway": "JR-East.Uchibo"},
     "34": {"board": "宇都宮線", "suki": "東北本線", "railway": "JR-East.Utsunomiya"},
     "35": {"board": "青梅線", "suki": "青梅線", "railway": "JR-East.Ome"},
+    # --- 混编进其他文件的支線 (实测 org.lineCode) ---
+    "38": {"board": "八高線", "suki": "八高線", "railway": "JR-East.Hachiko"},  # rides in train_43 (埼京)
+    "48": {"board": "常磐線快速", "suki": "常磐線", "railway": "JR-East.JobanRapid"},
+    "61": {"board": "東金線", "suki": "東金線", "railway": "JR-East.Togane"},  # rides in train_54 (外房)
+    "65": {"board": "八高線", "suki": "八高線", "railway": "JR-East.Hachiko"},  # rides in train_46-1
+    "66": {"board": "水戸線", "suki": "水戸線", "railway": "JR-East.Mito"},  # rides in train_47/102-16
+    "7801": {"board": "しなの鉄道線", "suki": "しなの鉄道線", "railway": "JR-East.Shinano"},  # rides in train_77
     # --- 東北・信越 commuter ---
     "21": {"board": "東北本線", "suki": "東北本線", "railway": "JR-East.TohokuMain"},
     "14": {"board": "常磐線", "suki": "常磐線", "railway": "JR-East.Joban"},
@@ -107,7 +114,7 @@ DEFAULT_LINE = {"board": "JR-East", "suki": "東北本線", "railway": "JR-East.
 # files actually pulled: every cloudrail-native line code from the app's
 # train-location menu (2026-10 CSV inventory), minus 90/86 which ride in 88.
 PULL_FILES = [
-    "88", "87", "89",
+    "88", "87", "89", "86-1", "90-1",
     "21-5", "21-3", "21-4", "21-2", "21-1", "14", "16", "17",
     "5-1", "5-2", "6", "4",
     "40", "41", "43", "44", "45", "46-1", "46-2", "47", "49",
