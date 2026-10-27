@@ -72,8 +72,11 @@ LINES = {
     "67": {"board": "武蔵野線", "suki": "武蔵野線", "railway": "JR-East.Musashino"},
     "69": {"board": "横須賀線", "suki": "横須賀線", "railway": "JR-East.Yokosuka"},
     "70": {"board": "横浜線", "suki": "横浜線", "railway": "JR-East.Yokohama"},
-    "101": {"board": "成田エクスプレス", "suki": "成田空港線", "railway": "JR-East.NaritaExpress"},
-    "102": {"board": "上野東京ライン", "suki": "東海道本線", "railway": "JR-East.UenoTokyo"},
+    "101": {"board": "成田エクスプレス", "suki": "成田空港線", "railway": "JR-East.NaritaExpress",
+             # cross-line: runs 成田空港->千葉(総武)→錦糸町→東京→品川→渋谷→新宿(山手)
+             "pools": ["成田空港線", "総武本線", "山手線", "東海道本線"]},
+    "102": {"board": "上野東京ライン", "suki": "東海道本線", "railway": "JR-East.UenoTokyo",
+             "pools": ["東海道本線", "東北本線"]},
     "31": {"board": "五日市線", "suki": "五日市線", "railway": "JR-East.Itsukaichi"},
     "32": {"board": "伊東線", "suki": "伊東線", "railway": "JR-East.Ito"},
     "33": {"board": "内房線", "suki": "内房線", "railway": "JR-East.Uchibo"},
@@ -102,11 +105,16 @@ LINES = {
     "79": {"board": "信越本線", "suki": "信越本線", "railway": "JR-East.Shinetsu"},
     "82": {"board": "白新線", "suki": "白新線", "railway": "JR-East.Hakushin"},
     # --- 特急形 (heading to suki pool of the physical line) ---
-    "901": {"board": "踊り子", "suki": "伊東線", "railway": "JR-East.Odoriko"},
-    "902": {"board": "踊り子", "suki": "伊東線", "railway": "JR-East.Odoriko"},
-    "903": {"board": "あずさ", "suki": "中央本線", "railway": "JR-East.Azusa"},
-    "904": {"board": "ひたち", "suki": "常磐線", "railway": "JR-East.Hitachi"},
-    "905": {"board": "あかぎ", "suki": "高崎線", "railway": "JR-East.Akagi"},
+    "901": {"board": "踊り子", "suki": "伊東線", "railway": "JR-East.Odoriko",
+             "pools": ["伊東線", "東海道本線"]},
+    "902": {"board": "踊り子", "suki": "伊東線", "railway": "JR-East.Odoriko",
+             "pools": ["伊東線", "東海道本線"]},
+    "903": {"board": "あずさ", "suki": "中央本線", "railway": "JR-East.Azusa",
+             "pools": ["中央本線"]},
+    "904": {"board": "ひたち", "suki": "常磐線", "railway": "JR-East.Hitachi",
+             "pools": ["常磐線", "東海道本線"]},
+    "905": {"board": "あかぎ", "suki": "高崎線", "railway": "JR-East.Akagi",
+             "pools": ["高崎線", "東北本線"]},
 }
 
 DEFAULT_LINE = {"board": "JR-East", "suki": "東北本線", "railway": "JR-East.Unknown"}
@@ -302,6 +310,9 @@ def fetch(src=None):
                 "odpt:carComposition": (t.get("cars") or {}).get("value"),
                 "_line_ja": meta["board"],
                 "_suki_line": meta["suki"],
+                # cross-line services (N'EX etc.) try several pools in order;
+                # non-cross-line feeds leave this empty and stay single-pool
+                "_suki_pools": meta.get("pools") or [meta["suki"]],
                 "_station": first,
                 "_upcoming": [r["name"] for r in remaining],
                 "_dest": dest,

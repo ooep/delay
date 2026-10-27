@@ -929,7 +929,7 @@ def bake(source, data_dir):
                     # 跨東海道/山陽/九州全部新干线池合并候选;其他线路单池
                     lines_pool = (["東海道新幹線", "山陽新幹線", "九州新幹線"]
                                   if t.get("_train_kind") is not None
-                                  else [t["_line_ja"]])
+                                  else (t.get("_suki_pools") or [t["_line_ja"]]))
                     direct = None
                     for station in (t.get("_station_keys") or [t.get("_station")]):
                         if not station:
