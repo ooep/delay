@@ -773,6 +773,9 @@ def bake(source, data_dir):
         ("Seibu", source.seibu_feed),
         ("Sotetsu", source.sotetsu_feed),
         ("Odakyu", source.odakyu_feed),
+        # Osaka Metro line-level operation status (official operationinfo API,
+        # keyless; position/congestion stays in osakametro-congestion.json)
+        ("OsakaMetro", source.osakametro_feed),
         ("Keio", source.keio_feed),
         # Tokyo Metro keyless line-level status (no ODPT key needed; with
         # ODPT_KEY the odpt feed below already carries per-train real data)

@@ -331,6 +331,16 @@ class Source:
 
         return odakyu.fetch(self)
 
+    def osakametro_feed(self):
+        """Osaka Metro line-level operation status (baker/osakametro.py
+        fetch_operation): the official operationinfo API carries per-line
+        delay/suspension alerts with cause + time + range. Position/congestion
+        stays in the standalone osakametro-congestion.json payload. Offline
+        replays the captured om-operation.json / om-route.json fixtures."""
+        from . import osakametro
+
+        return osakametro.fetch_operation(self)
+
     def keio_feed(self):
         """Keio tid-platform web JSON (baker/keio.py). Offline mode replays
         the captured keio-traffic/position/syasyu/ikisaki fixtures."""
