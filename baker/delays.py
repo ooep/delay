@@ -1138,6 +1138,10 @@ def bake(source, data_dir):
                         else _hhmm_min(e.get("scheduled", {}).get("dep")),
                     }
                 )
+                # same stopping pattern, several delayed services at once:
+                # surface the worst delay (both directions must stay visible on
+                # the map; the front-end breaks the tie by dep anyway)
+                slot["delay_min"] = max(slot["delay_min"], e["delay_min"])
     # freshness: for each source, how stale the provider's data was when we
     # fetched it (fetched_at minus the provider's own latest timestamp).
     freshness = {}
@@ -1174,17 +1178,12 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
-    # sukijr.json: the strictly-one-to-one simplification the site asked for
-    # - {tmaps_key: delay_minutes}, unambiguous strong matches only.
-    # Ambiguous keys (same stopping pattern, several delayed services) stay
-    # in delays.json's by_suki_key with alternatives for time tie-breaking.
-    # Reserved header keys (version/generated_at/freshness) ride along so
-    # consumers can check data age; numeric tmaps keys never collide.
-    sukijr = {
-        k: v["delay_min"]
-        for k, v in payload["by_suki_key"].items()
-        if not v["ambiguous"]
-    }
+    # sukijr.json: the flat {tmaps_key: delay_minutes} lookup for the site.
+    # Unambiguous strong matches map directly. Ambiguous keys (same stopping
+    # pattern, several delayed services at once) are also included now -
+    # delay_min is the worst in the group, and the front-end breaks the dep
+    # tie; dropping them whole made whole directions disappear from the map.
+    sukijr = {k: v["delay_min"] for k, v in payload["by_suki_key"].items()}
     sukijr_out = {
         "version": 1,
         "generated_at": payload["generated_at"],
@@ -1201,7 +1200,7 @@ def main():
         f"delays: {payload['delayed_count']} delayed, "
         f"{with_legs} with dokorail leg, {with_suki} mapped to suki keys "
         f"({payload['matched_suki_count']} unique keys, "
-        f"{len(sukijr)} one-to-one) -> {out}"
+        f"{len(sukijr)} in sukijr.json) -> {out}"
     )
 
 
