@@ -273,6 +273,13 @@ class Source:
 
         return tx.fetch(self)
 
+    def tobuspapp_feed(self):
+        """Tobu POINT SSR-HTML position pages (baker/tobuspapp.py). Offline
+        mode replays the captured tobu-<bit>.html fixtures."""
+        from . import tobuspapp
+
+        return tobuspapp.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))

@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no" id="vport" />
+	<meta name="format-detection" content="telephone=no,address=no,email=no">
+	<link rel="stylesheet" href="../css/normalize.css">
+	<link rel="stylesheet" href="../css/tobupo/train_position.css">
+	<link rel="stylesheet" href="../css/tobupo/train_position_line4096.css">
+	<link rel="stylesheet" href="../css/tobupo/train_position_server.css">
+	<script src="../js/jquery-3.2.1.slim.min.js"></script>
+	<script src="../js/tobupo/train_position_server.js"></script>
+	<script src="../js/tobupo/train_position.js"></script>
+	<title>列車在線位置</title>
+</head>
+<body>
+	<input type="image" class="updateIcon" alt="更新" onclick="update()" src="./img/xxxhdpi/update_button.png">
+	<input type="image" class="autoReloadIcon" id="autoReloadOnOff" alt="自動"  onclick="autoReloadChange()" src="./img/xxxhdpi/auto_reload_off_button.png">
+	<div class="acquisitionTime">
+		<div>実際の列車位置と異なる場合があります。</div>
+		<div>15時20分の運行情報です</div>
+	</div>
+	<div class="lineChangeBox">
+		<div id="line1" class="lineChangeWrapper">
+			<div class="lineChangeButton"><a href="javascript:lineChangeButton(1);"><img src="./img/xxxhdpi/pos_icon_skytreeline.png">東武スカイツリーライン<span class="changeStation">TS01</span></a></div>
+		</div>
+		<div id="line16" class="lineChangeWrapper">
+			<div class="lineChangeButton"><a href="javascript:lineChangeButton(16);"><img src="./img/xxxhdpi/pos_icon_kameidoline.png">亀戸線<span class="changeStation">TS04</span></a></div>
+		</div>
+		<div id="line32" class="lineChangeWrapper">
+			<div class="lineChangeButton"><a href="javascript:lineChangeButton(32);"><img src="./img/xxxhdpi/pos_icon_daishiline.png">大師線<span class="changeStation">TS13</span></a></div>
+		</div>
+		<div id="line8" class="lineChangeWrapper">
+			<div class="lineChangeButton"><a href="javascript:lineChangeButton(8);"><img src="./img/xxxhdpi/pos_icon_nodaline.png">東武アーバンパークライン<span class="changeStation">TD01</span></a></div>
+		</div>
+		<div id="line2" class="lineChangeWrapper">
+			<div class="lineChangeButton"><a href="javascript:lineChangeButton(2);"><img src="./img/xxxhdpi/pos_icon_isesakiline.png">伊勢崎線<span class="changeStation">TS30</span></a></div>
+		</div>
+		<div id="line4" class="lineChangeWrapper">
+			<div class="lineChangeButton"><a href="javascript:lineChangeButton(4);"><img src="./img/xxxhdpi/pos_icon_nikkoline.png">日光線<span class="changeStation">TS30</span></a></div>
+		</div>
+		<div id="line4096" class="lineChangeWrapper">
+			<div class="lineChangeButton" id="lineNow" style="border-bottom: 1px solid #111;margin-bottom: -1px;"><img src="./img/xxxhdpi/pos_icon_tojoline.png">東上線<span class="changeLine">4096</span><span class="changeStation">TJ01</span></div>
+		</div>
+		<div id="line8192" class="lineChangeWrapper">
+			<div class="lineChangeButton"><a href="javascript:lineChangeButton(8192);"><img src="./img/xxxhdpi/pos_icon_ogoseline.png">越生線<span class="changeStation">TJ26</span></a></div>
+		</div>&thinsp;
+	</div>
+	<div class="tabBox">
+		<div id="slideButton"></div>
+		<div class="tabButton tabButton1"><span id="slideButton1">上り-池袋方面</span></div>
+		<div class="tabButton tabButton2"><span id="slideButton2">下り-寄居方面</span></div>
+		<div id="tabButton1" class="tabButtonClickable"></div>
+		<div id="tabButton2" class="tabButtonClickable"></div>
+	</div>
+
+	<div class="scrollBox">
+		<div id="balloon" class="balloon">
+			<div class="triangle"></div>
+			<span class="balloonText"></span>
+			<div class="balloonClose"><span class="balloonCloseTxet">閉じる</span></div>
+		</div>
+		<div id="balloonMulti" class="balloon">
+			<div class="triangle"></div>
+			<div class="balloonHead"></div>
+			<div class="scrollBlank"></div>
+			<div class="balloonBox"><span class="balloonText"></span></div>
+			<div class="balloonClose"><span class="balloonCloseTxet">閉じる</span></div>
+		</div>
+
+		<div class="stations">
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ01"><span class="stationTxt">池袋</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_7.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>準急</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt7"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					川越市行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					準急<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="otherCompany otherNum_0">
+	<img src="./img/xxxhdpi/jreast.png" class="otherCompanyIcon">
+	<div class="otherCompanyDialog">
+		<div class="otherCompanyStationName"><img src="./img/xxxhdpi/jreast.png" class="otherCompanyIcon">&nbsp;JR東日本</div>
+		<div class="otherCompanyLineList"><div class="otherCompanyTable">		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/yamanote.png" class="otherLineIcon">山手線</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">jreast-app://?vid=C603-0001&kid=6008-0001&at4=0108</span>
+			<span class="appStore">https://itunes.apple.com/jp/app/apple-store/id820004378?pt=641888&ct=tobuapp&mt=8</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=jp.co.jreast&referrer=utm_source%3Dtobuapp</span>
+		</div>		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/saikyo.png" class="otherLineIcon">埼京線</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">jreast-app://?vid=C601-0001&kid=6008-0001&at4=0108&line=43&lineCode=43</span>
+			<span class="appStore">https://itunes.apple.com/jp/app/apple-store/id820004378?pt=641888&ct=tobuapp&mt=8</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=jp.co.jreast&referrer=utm_source%3Dtobuapp</span>
+		</div>		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/syonanshinjyuku.png" class="otherLineIcon">湘南新宿ライン</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">jreast-app://?vid=C601-0001&kid=6008-0001&at4=0108&line=46-1&lineCode=46-1</span>
+			<span class="appStore">https://itunes.apple.com/jp/app/apple-store/id820004378?pt=641888&ct=tobuapp&mt=8</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=jp.co.jreast&referrer=utm_source%3Dtobuapp</span>
+		</div></div></div>
+		<div class="otherCompanyClose"><span class="otherCompanyCloseTxet">閉じる</span></div>
+	</div>
+</div><div class="otherCompany otherNum_1">
+	<img src="./img/xxxhdpi/tokyometro.png" class="otherCompanyIcon">
+	<div class="otherCompanyDialog">
+		<div class="otherCompanyStationName"><img src="./img/xxxhdpi/tokyometro.png" class="otherCompanyIcon">&nbsp;東京メトロ</div>
+		<div class="otherCompanyLineList"><div class="otherCompanyTable">		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/marunouchi.png" class="otherLineIcon">丸ノ内線</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">metroapp://?contentsId=trainLocation&sourceAppId=tobuapp&useUserStation=0&stationId=odpt.Station:TokyoMetro.Marunouchi.Ikebukuro</span>
+			<span class="appStore">https://itunes.apple.com/app/apple-store/id439646577?pt=567246&ct</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=com.tokyometro&referrer=utm_source%3D</span>
+		</div>		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/yurakucho.png" class="otherLineIcon">有楽町線</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">metroapp://?contentsId=trainLocation&sourceAppId=tobuapp&useUserStation=0&stationId=odpt.Station:TokyoMetro.Yurakucho.Ikebukuro</span>
+			<span class="appStore">https://itunes.apple.com/app/apple-store/id439646577?pt=567246&ct</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=com.tokyometro&referrer=utm_source%3D</span>
+		</div>		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/fukutoshin.png" class="otherLineIcon">副都心線</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">metroapp://?contentsId=trainLocation&sourceAppId=tobuapp&useUserStation=0&stationId=odpt.Station:TokyoMetro.Fukutoshin.Ikebukuro</span>
+			<span class="appStore">https://itunes.apple.com/app/apple-store/id439646577?pt=567246&ct</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=com.tokyometro&referrer=utm_source%3D</span>
+		</div></div></div>
+		<div class="otherCompanyClose"><span class="otherCompanyCloseTxet">閉じる</span></div>
+	</div>
+</div><div class="otherCompany otherNum_2">
+	<img src="./img/xxxhdpi/seibu.png" class="otherCompanyIcon">
+	<div class="otherCompanyDialog">
+		<div class="otherCompanyStationName"><img src="./img/xxxhdpi/seibu.png" class="otherCompanyIcon">&nbsp;西武鉄道</div>
+		<div class="otherCompanyLineList"><div class="otherCompanyTable">		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/ikebukuro.png" class="otherLineIcon">池袋線</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">seibuapp://invoke?f=position&l=L001&s=S01001K&kid=tobu-app</span>
+			<span class="appStore">https://itunes.apple.com/jp/app/id1349149138?mt=8&ct=tobu-app</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=jp.seibugroup.seiburailway.seibuapp.client&referrer=utm_source%3Dtobu-app</span>
+		</div></div></div>
+		<div class="otherCompanyClose"><span class="otherCompanyCloseTxet">閉じる</span></div>
+	</div>
+</div>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					川越市行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ02"><span class="stationTxt">北池袋</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	<div class="trainOption trainOptionDelay">+4</div>
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					<div class="delayTime">遅れ4分</div>
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ03"><span class="stationTxt">下板橋</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div><div class="trainPosition1 direction1 trainX2">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	<div class="trainOption trainOptionDelay">+1</div>
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					<div class="delayTime">遅れ1分</div>
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ04"><span class="stationTxt">大山</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					成増行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ05"><span class="stationTxt">中板橋</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ06"><span class="stationTxt">ときわ台</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ07"><span class="stationTxt">上板橋</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					成増行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ08"><span class="stationTxt">東武練馬</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ09"><span class="stationTxt">下赤塚</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ10"><span class="stationTxt">成増</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					成増行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div><div class="trainPosition2 direction2 trainX2">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					小川町行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div><div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div><div class="trainPosition1 direction1 trainX2">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ11"><span class="stationTxt">和光市</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="otherCompany otherNum_0">
+	<img src="./img/xxxhdpi/tokyometro.png" class="otherCompanyIcon">
+	<div class="otherCompanyDialog">
+		<div class="otherCompanyStationName"><img src="./img/xxxhdpi/tokyometro.png" class="otherCompanyIcon">&nbsp;東京メトロ</div>
+		<div class="otherCompanyLineList"><div class="otherCompanyTable">		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/yurakucho.png" class="otherLineIcon">有楽町線</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">metroapp://?contentsId=trainLocation&sourceAppId=tobuapp&useUserStation=0&stationId=odpt.Station:TokyoMetro.Yurakucho.Wakoshi</span>
+			<span class="appStore">https://itunes.apple.com/app/apple-store/id439646577?pt=567246&ct</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=com.tokyometro&referrer=utm_source%3D</span>
+		</div>		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/fukutoshin.png" class="otherLineIcon">副都心線</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">metroapp://?contentsId=trainLocation&sourceAppId=tobuapp&useUserStation=0&stationId=odpt.Station:TokyoMetro.Fukutoshin.Wakoshi</span>
+			<span class="appStore">https://itunes.apple.com/app/apple-store/id439646577?pt=567246&ct</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=com.tokyometro&referrer=utm_source%3D</span>
+		</div></div></div>
+		<div class="otherCompanyClose"><span class="otherCompanyCloseTxet">閉じる</span></div>
+	</div>
+</div>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					川越市行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ12"><span class="stationTxt">朝霞</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_7.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>準急</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt7"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					準急<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					志木行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div><div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_5.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>快急</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt5"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					元町・中華街行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					快速急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ13"><span class="stationTxt">朝霞台</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="otherCompany otherNum_0">
+	<img src="./img/xxxhdpi/jreast.png" class="otherCompanyIcon">
+	<div class="otherCompanyDialog">
+		<div class="otherCompanyStationName"><img src="./img/xxxhdpi/jreast.png" class="otherCompanyIcon">&nbsp;JR東日本</div>
+		<div class="otherCompanyLineList"><div class="otherCompanyTable">		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/musashino.png" class="otherLineIcon">武蔵野線</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">jreast-app://?vid=C601-0001&kid=6008-0001&at4=0550&line=67-1&lineCode=67-1</span>
+			<span class="appStore">https://itunes.apple.com/jp/app/apple-store/id820004378?pt=641888&ct=tobuapp&mt=8</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=jp.co.jreast&referrer=utm_source%3Dtobuapp</span>
+		</div></div></div>
+		<div class="otherCompanyClose"><span class="otherCompanyCloseTxet">閉じる</span></div>
+	</div>
+</div>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ14"><span class="stationTxt">志木</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					小川町行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div><div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ15"><span class="stationTxt">柳瀬川</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_7.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>準急</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt7"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					川越市行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					準急<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ16"><span class="stationTxt">みずほ台</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	<div class="trainOption trainOptionDelay">+1</div>
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					元町・中華街行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					<div class="delayTime">遅れ1分</div>
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ17"><span class="stationTxt">鶴瀬</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ18"><span class="stationTxt">ふじみ野</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					川越市行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div><div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					新木場行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_5.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>快急</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt5"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					森林公園行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					快速急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ19"><span class="stationTxt">上福岡</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ20"><span class="stationTxt">新河岸</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					川越市行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ21"><span class="stationTxt">川越</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="otherCompany otherNum_0">
+	<img src="./img/xxxhdpi/jreast.png" class="otherCompanyIcon">
+	<div class="otherCompanyDialog">
+		<div class="otherCompanyStationName"><img src="./img/xxxhdpi/jreast.png" class="otherCompanyIcon">&nbsp;JR東日本</div>
+		<div class="otherCompanyLineList"><div class="otherCompanyTable">		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/kawagoe.png" class="otherLineIcon">川越線</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">jreast-app://?vid=C601-0001&kid=6008-0001&at4=0525&line=43&lineCode=43</span>
+			<span class="appStore">https://itunes.apple.com/jp/app/apple-store/id820004378?pt=641888&ct=tobuapp&mt=8</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=jp.co.jreast&referrer=utm_source%3Dtobuapp</span>
+		</div></div></div>
+		<div class="otherCompanyClose"><span class="otherCompanyCloseTxet">閉じる</span></div>
+	</div>
+</div>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ22"><span class="stationTxt">川越市</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					川越市行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div><div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="otherCompany otherNum_0">
+	<img src="./img/xxxhdpi/seibu.png" class="otherCompanyIcon">
+	<div class="otherCompanyDialog">
+		<div class="otherCompanyStationName"><img src="./img/xxxhdpi/seibu.png" class="otherCompanyIcon">&nbsp;西武鉄道</div>
+		<div class="otherCompanyLineList"><div class="otherCompanyTable">		<div class="otherCompanyLine">
+			<div class="otherCompanyLineView"><img src="./img/xxxhdpi/shinjyuku.png" class="otherLineIcon">新宿線</div>
+			<div class="otherCompanyLineCursor">〉</div>
+			<span class="schemeUrl">seibuapp://invoke?f=position&l=L009&s=S1460HE&kid=tobu-app</span>
+			<span class="appStore">https://itunes.apple.com/jp/app/id1349149138?mt=8&ct=tobu-app</span>
+			<span class="googlePlay">https://play.google.com/store/apps/details?id=jp.seibugroup.seiburailway.seibuapp.client&referrer=utm_source%3Dtobu-app</span>
+		</div></div></div>
+		<div class="otherCompanyClose"><span class="otherCompanyCloseTxet">閉じる</span></div>
+	</div>
+</div>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ23"><span class="stationTxt">霞ケ関</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					小川町行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ24"><span class="stationTxt">鶴ケ島</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ25"><span class="stationTxt">若葉</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ26"><span class="stationTxt">坂戸</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+					<div class="lineChange lineChange1"><img src="./img/xxxhdpi/pos_icon_ogoseline.png"><div class="lineChangeName">越生線</div><span class="changeLine">8192</span><span class="changeStation">TJ26</span></div>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ27"><span class="stationTxt">北坂戸</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					森林公園行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					元町・中華街行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ28"><span class="stationTxt">高坂</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ29"><span class="stationTxt">東松山</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_5.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>快急</span>
+	</div>
+	<div class="trainOption trainOptionDelay">+1</div>
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt5"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					森林公園行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					快速急行<br />
+				</div>
+				<div class="balloonDetailText">
+					<div class="delayTime">遅れ1分</div>
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ30"><span class="stationTxt">森林公園</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					森林公園行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div><div class="trainPosition1 direction1 trainX2">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					池袋行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ31"><span class="stationTxt">つきのわ</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ32"><span class="stationTxt">武蔵嵐山</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_2.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>急行</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt2"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					小川町行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					急行<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ33"><span class="stationTxt">小川町</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_4.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_30.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_5.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_2.png" class="stopTrainTypeImg"></div><div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_7.png" class="stopTrainTypeImg">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ34"><span class="stationTxt">東武竹沢</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition2 direction2 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg2" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					寄居行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationNameMinamiyorii" id="TJ35"><span class="stationTxt">みなみ寄居<br>＜ホンダ寄居前＞周辺</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ36"><span class="stationTxt">男衾</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ37"><span class="stationTxt">鉢形</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;<div class="trainPosition1 direction1 trainX1">
+	<img src="./img/xxxhdpi/pos_icon_8.png" class="trainTypeImg trainTypeImg1" />
+	<div class="trainName">
+		<span>普通</span>
+	</div>
+	
+	<div class="detail">
+				<div class="balloonDetail">
+			<div><div class="balloonDetailIcon lineColorSt8"></div></div>
+			<div>
+				<div class="balloonDetailText">
+					小川町行き<br />
+				</div>
+				<div class="balloonDetailText trainTypeName">
+					普通<br />
+				</div>
+				<div class="balloonDetailText">
+					
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div></div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ38"><span class="stationTxt">玉淀周辺</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpace stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<div class="stationBlock stationTable">
+				<div class="tableLeft">
+					<span class="stationName" id="TJ39"><span class="stationTxt">寄居</span></span>
+				</div>
+				<div class="tableRight">
+					<div class="posLeft">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr class="hr1">
+
+			<div class="stationSpaceFooter stationTable">
+				<div class="tableLeft">
+					<div class="stopTrainType direction1">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					<div class="stopTrainType direction2">	<img src="./img/xxxhdpi/train_type_icon_8.png" class="stopTrainTypeImg"></div>
+					
+				</div>
+				<div class="tableRight">
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="blackCurtain"></div>	<div class="blackFilm"></div>
+</body>
