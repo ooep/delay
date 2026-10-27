@@ -38,20 +38,86 @@ UA = ("JR%E6%9D%B1%E6%97%A5%E6%9C%AC%E3%82%A2%E3%83%97%E3%83%AA; "
       "Dalvik/2.1.0 (Linux; U; Android 14; Pixel 8 Build/UP1A.231005.007)")
 
 # cloudrail lineCode -> (board line name, suki line pool, railway id).
-# train_88.json actually mixes lineCode 88/90/86 (混编 running on the same
-# Tohoku corridor), so per-train grouping uses the train's own lineCode, not
-# the file's. Only 88/87/89 files exist as separate pulls; 90/86 rides in 88.
+# train files mix lineCodes (e.g. train_57.json holds lineCode 58 runs;
+# train_88.json holds 88/90/86), so per-train grouping uses the train's own
+# lineCode. Suki pool names are chosen against data/suki/tmaps.json's pool;
+# pools that don't exist there (京浜東北線, 埼京線...) map to the physical
+# line the route actually runs on and silently fail to resolve rather than
+# mis-tagging.
 LINES = {
+    # --- Shinkansen (already live) ---
     "88": {"board": "東北新幹線", "suki": "東北新幹線", "railway": "JR-East.TohokuShinkansen"},
     "87": {"board": "上越新幹線", "suki": "上越新幹線", "railway": "JR-East.JoetsuShinkansen"},
     "89": {"board": "北陸新幹線", "suki": "北陸新幹線", "railway": "JR-East.HokurikuShinkansen"},
-    # mini-Shinkansen: suki tags つばさ/こまち runs on the physical lines
     "90": {"board": "山形新幹線", "suki": "奥羽本線", "railway": "JR-East.YamagataShinkansen"},
     "86": {"board": "秋田新幹線", "suki": "田沢湖線", "railway": "JR-East.AkitaShinkansen"},
+    # --- 首都圏 commuter ---
+    "40": {"board": "京浜東北線", "suki": "根岸線", "railway": "JR-East.KeihinTohoku"},
+    "41": {"board": "京葉線", "suki": "京葉線", "railway": "JR-East.Keiyo"},
+    "43": {"board": "埼京線", "suki": "川越線", "railway": "JR-East.Saikyo"},
+    "44": {"board": "相模線", "suki": "相模線", "railway": "JR-East.Sagami"},
+    "46": {"board": "湘南新宿ライン", "suki": "東海道本線", "railway": "JR-East.Shonei"},
+    "47": {"board": "常磐線快速", "suki": "常磐線", "railway": "JR-East.JobanRapid"},
+    "49": {"board": "常磐線各停", "suki": "常磐線", "railway": "JR-East.JobanLocal"},
+    "52": {"board": "総武快速線", "suki": "総武本線", "railway": "JR-East.SobuRapid"},
+    "53": {"board": "総武本線", "suki": "総武本線", "railway": "JR-East.Sobu"},
+    "54": {"board": "外房線", "suki": "外房線", "railway": "JR-East.Sotobo"},
+    "55": {"board": "高崎線", "suki": "高崎線", "railway": "JR-East.Takasaki"},
+    "56": {"board": "中央・総武各停", "suki": "中央線", "railway": "JR-East.ChuoLocal"},
+    "57": {"board": "中央線快速", "suki": "中央本線", "railway": "JR-East.ChuoRapid"},
+    "58": {"board": "中央本線", "suki": "中央本線", "railway": "JR-East.Chuo"},
+    "60": {"board": "東海道線", "suki": "東海道本線", "railway": "JR-East.Tokaido"},
+    "62": {"board": "成田線", "suki": "成田線", "railway": "JR-East.Narita"},
+    "63": {"board": "南武線", "suki": "南武線", "railway": "JR-East.Nambu"},
+    "67": {"board": "武蔵野線", "suki": "武蔵野線", "railway": "JR-East.Musashino"},
+    "69": {"board": "横須賀線", "suki": "横須賀線", "railway": "JR-East.Yokosuka"},
+    "70": {"board": "横浜線", "suki": "横浜線", "railway": "JR-East.Yokohama"},
+    "101": {"board": "成田エクスプレス", "suki": "総武本線", "railway": "JR-East.NaritaExpress"},
+    "102": {"board": "上野東京ライン", "suki": "東海道本線", "railway": "JR-East.UenoTokyo"},
+    "31": {"board": "五日市線", "suki": "五日市線", "railway": "JR-East.Itsukaichi"},
+    "32": {"board": "伊東線", "suki": "伊東線", "railway": "JR-East.Ito"},
+    "33": {"board": "内房線", "suki": "内房線", "railway": "JR-East.Uchibo"},
+    "34": {"board": "宇都宮線", "suki": "東北本線", "railway": "JR-East.Utsunomiya"},
+    "35": {"board": "青梅線", "suki": "青梅線", "railway": "JR-East.Ome"},
+    # --- 東北・信越 commuter ---
+    "21": {"board": "東北本線", "suki": "東北本線", "railway": "JR-East.TohokuMain"},
+    "14": {"board": "常磐線", "suki": "常磐線", "railway": "JR-East.Joban"},
+    "16": {"board": "仙山線", "suki": "仙山線", "railway": "JR-East.Senzan"},
+    "17": {"board": "仙石線", "suki": "仙石線", "railway": "JR-East.Senseki"},
+    "5": {"board": "奥羽本線", "suki": "奥羽本線", "railway": "JR-East.Ou"},
+    "6": {"board": "山形線", "suki": "奥羽本線", "railway": "JR-East.Yamagata"},
+    "4": {"board": "羽越本線", "suki": "羽越本線", "railway": "JR-East.Uetsu"},
+    "73": {"board": "羽越本線", "suki": "羽越本線", "railway": "JR-East.Uetsu"},
+    "45": {"board": "上越線", "suki": "上越線", "railway": "JR-East.Joetsu"},
+    "78": {"board": "上越線", "suki": "上越線", "railway": "JR-East.Joetsu"},
+    "71": {"board": "両毛線", "suki": "両毛線", "railway": "JR-East.Ryomo"},
+    "77": {"board": "信越本線", "suki": "信越本線", "railway": "JR-East.Shinetsu"},
+    "79": {"board": "信越本線", "suki": "信越本線", "railway": "JR-East.Shinetsu"},
+    "82": {"board": "白新線", "suki": "白新線", "railway": "JR-East.Hakushin"},
+    # --- 特急形 (heading to suki pool of the physical line) ---
+    "901": {"board": "踊り子", "suki": "伊東線", "railway": "JR-East.Odoriko"},
+    "902": {"board": "踊り子", "suki": "伊東線", "railway": "JR-East.Odoriko"},
+    "903": {"board": "あずさ", "suki": "中央本線", "railway": "JR-East.Azusa"},
+    "904": {"board": "ひたち", "suki": "常磐線", "railway": "JR-East.Hitachi"},
+    "905": {"board": "あかぎ", "suki": "高崎線", "railway": "JR-East.Akagi"},
 }
 
-# files actually pulled (the others come mixed into train_88.json)
-PULL_FILES = ["88", "87", "89"]
+DEFAULT_LINE = {"board": "JR-East", "suki": "東北本線", "railway": "JR-East.Unknown"}
+
+# files actually pulled: every cloudrail-native line code from the app's
+# train-location menu (2026-10 CSV inventory), minus 90/86 which ride in 88.
+PULL_FILES = [
+    "88", "87", "89",
+    "21-5", "21-3", "21-4", "21-2", "21-1", "14", "16", "17",
+    "5-1", "5-2", "6", "4",
+    "40", "41", "43", "44", "45", "46-1", "46-2", "47", "49",
+    "52", "53", "54", "55", "56", "57", "58", "60",
+    "62-1", "62-2", "62-3", "63", "67-1", "67-2", "69", "70", "71",
+    "77", "78", "79", "82",
+    "101-1", "101-3", "102-8", "102-12", "102-16",
+    "31", "32", "33", "34", "35",
+    "73", "901", "902", "903", "904", "905",
+]
 
 DELAY_THRESHOLD_MIN = 1
 _UID = None  # process-live; each GitHub-Actions run registers fresh (fast)
@@ -183,7 +249,7 @@ def fetch(src=None):
                 continue
             org = (t.get("organizationBasicInfo") or [{}])[0]
             # per-train lineCode (88 file mixes 88/90/86)
-            meta = LINES.get(str(org.get("lineCode") or file_id), LINES["88"])
+            meta = LINES.get(str(org.get("lineCode") or ""), LINES.get(str(file_id), DEFAULT_LINE))
             nickname = (org.get("nickname") or {}).get("ja")
             dest = ((org.get("destination") or {}).get("fullName") or {}).get("ja")
             stops_raw = []
