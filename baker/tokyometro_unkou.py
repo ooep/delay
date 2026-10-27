@@ -51,6 +51,32 @@ _STATE_RE = re.compile(
     r"(\d{1,2}月\d{1,2}日\s*\d{2}:\d{2})\s*現在\s*情報更新(.{0,500}?)(?=###|\n###|履歴|注意1|過去35日間|$)",
     re.DOTALL,
 )
+# Akamai 403s datacenter IPs on tokyometro.jp (verified on GitHub runners).
+# Fallback chain per page: TOKYOMETRO_BASE (user reverse proxy) -> direct ->
+# public raw proxies. First success wins; every miss degrades one hop.
+PROXY_TEMPLATES = (
+    "https://api.allorigins.win/raw?url={url}",
+    "https://api.codetabs.com/v1/proxy?quest={url}",
+)
+
+
+def _page_text(src, base, slug):
+    """Try the configured base, then direct, then public proxies. Returns
+    (html, via) or (None, last_error)."""
+    from urllib.parse import quote
+
+    url = f"{base}/unkou/history/{slug}.html"
+    candidates = [url]
+    if base != DEFAULT_BASE:
+        candidates.append(f"{DEFAULT_BASE}/unkou/history/{slug}.html")
+    candidates += [t.format(url=quote(u, safe="")) for u in candidates for t in PROXY_TEMPLATES]
+    last = None
+    for u in candidates:
+        try:
+            return common.get_text(u), u
+        except Exception as exc:  # noqa: BLE001 - any miss degrades a hop
+            last = exc
+    return None, last
 
 
 def _parse_status_text(s):
@@ -72,17 +98,15 @@ def fetch(src=None):
     body = []
     fetched_at = common.jst_now()
     for slug, ja in LINES:
-        url = f"{base}/unkou/history/{slug}.html"
         if src.offline:
             try:
                 html = src.offline.get_text(f"tm-{slug}.html")
             except Exception:
                 continue
         else:
-            try:
-                html = common.get_text(url)
-            except Exception as exc:
-                print(f"tokyometro {slug}: {type(exc).__name__}: {str(exc)[:120]}")
+            html, _via = _page_text(src, base, slug)
+            if html is None:
+                print(f"tokyometro {slug}: all endpoints failed ({str(_via)[:120]})")
                 continue
         if not html:
             continue
