@@ -1,27 +1,31 @@
 name: collect-history
 
 # Delay-history collector - FULLY INDEPENDENT from bake-delays.
-#   - separate schedule (every 5 min, offset from bake's 10-min grid)
-#   - separate data dir (data/delay-history/, never touches delays.json)
-#   - commit once per day (JST 02:30), not per tick
 #
-# How "no commits during the day" works with GitHub Actions (every run is a
-# fresh checkout): the current month's file is carried between runs by the
-# Actions cache (keyed per month), so each 5-min tick only updates the file
-# in the cache. At JST 02:30 (UTC 17:30, after the last bake at JST 02:00)
-# the daily run restores the cache, writes the final month file and commits
-# it to main. Cache is repo-scoped and touched every 5 min, so it is never
-# evicted mid-month; if a cache miss ever occurs the file is rebuilt from
-# the last committed state (at most the intra-day delta since 02:30 is lost).
+# Runs ONCE per day during the overnight maintenance window (JST 02:30,
+# after the last bake at JST 02:00 and before service resumes at 05:00),
+# so it NEVER competes with the live bake for the main branch - zero
+# push conflicts by construction.
+#
+# How it works: bake commits data/delays.json to git on every change
+# (~every 10 min during service hours). This workflow replays yesterday's
+# committed snapshots (fetch-depth: 0 -> full history available) and
+# rebuilds that service day's delay records idempotently:
+#   python -m baker.history_collector --data-dir data
+# (replay-date defaults to yesterday JST). Re-running the same day is a
+# byte-identical no-op, so a manual re-run can never corrupt the data.
+#
+# Storage: ONE gzip file per month (data/delay-history/YYYY-MM.json.gz,
+# ~1.5 MB for a full month of every delayed train in Japan) + a global
+# index.json -> 13 files/year, ~15 MB total. Records are compact
+# (abbreviated fields, HH:MM timestamps); trains[] is insertion-ordered so
+# clients can offset/limit slice for pagination. Files are gzip JSON;
+# browsers decompress with DecompressionStream('gzip').
 
 on:
   schedule:
-    # 运行窗口: 东京时间 05:00 - 次日 02:00 (JST = UTC+9)
-    #   JST 05:00-26:00  =  UTC 20:00-23:59 (当日) + 00:00-17:00 (次日)
-    # 每 5 分钟聚合一次 (不提交); JST 02:30 提交前一天最终文件
-    - cron: "*/5 20-23 * * *"
-    - cron: "*/5 0-16 * * *"
-    - cron: "30 17 * * *"    # JST 02:30: 提交日 (与 bake 最后一班 02:00 错开)
+    # JST 02:30 = UTC 17:30
+    - cron: "30 17 * * *"
   workflow_dispatch:
 
 permissions:
@@ -37,34 +41,19 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: the collector replays delays.json snapshots
+          # from git log. fetch-depth 1 would make it see nothing.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Month key (JST)
-        id: month
-        run: echo "month=$(TZ=Asia/Tokyo date +%Y-%m)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore current month history (cache)
-        uses: actions/cache@v4
-        with:
-          path: data/delay-history
-          key: delay-history-${{ steps.month.outputs.month }}
-          restore-keys: |
-            delay-history-${{ steps.month.outputs.month }}
-
-      - name: Collect delay history (updates month file in place)
+      - name: Replay yesterday's delay history from git
         run: python -m baker.history_collector --data-dir data
 
-      - name: Save current month history (cache)
-        uses: actions/cache@v4
-        with:
-          path: data/delay-history
-          key: delay-history-${{ steps.month.outputs.month }}
-
-      - name: Commit daily file (only on the JST 02:30 run)
-        if: ${{ github.event.schedule == '30 17 * * *' }}
+      - name: Commit if changed
         run: |
           git config user.name "history[bot]"
           git config user.email "history@users.noreply.github.com"
@@ -72,8 +61,10 @@ jobs:
           if git diff --cached --quiet; then
             echo "history unchanged"
           else
-            git commit -m "delay-history: $(TZ=Asia/Tokyo date +'%Y-%m-%d') monthly file"
-            for i in 1 2 3 4 5; do
+            git commit -m "delay-history: $(TZ=Asia/Tokyo date +'%Y-%m-%d') service day"
+            # bake is idle during the maintenance window; still guard
+            # against a concurrent manual dispatch.
+            for i in 1 2 3; do
               git pull --no-rebase -X theirs origin main && git push && break
               echo "push retry $i"; sleep 10
             done
