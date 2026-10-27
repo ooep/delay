@@ -11,41 +11,15 @@ jobs:
       - name: Probe
         shell: bash
         run: |
+          set -e
           KEY="AIzaSyB_uHi1BV4pyknzJ_QGk1XrsaiLa4e12IQ"
-          IDT=$(curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY" -H 'Content-Type: application/json' -d '{"returnSecureToken":true}' | python3 -c "import sys,json;print(json.load(sys.stdin).get('idToken',''))" 2>/dev/null)
+          IDT=$(curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY" -H 'Content-Type: application/json' -d '{"returnSecureToken":true}' | python3 -c "import sys,json;print(json.load(sys.stdin).get('idToken',''))")
           echo "IDT len: ${#IDT}"
           echo "== all doc names =="
           curl -s --max-time 20 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents/tokyometro?pageSize=100" -H "Authorization: Bearer $IDT" -o /tmp/list.json
-          python3 -c "
-import json
-d=json.load(open('/tmp/list.json'))
-docs=d.get('documents',[])
-print('total docs:', len(docs))
-for x in docs: print(x['name'].split('/')[-1])
-"
-          echo "== per-line train summary (Bearer) =="
-          python3 - << 'PY'
-import json,urllib.request
-KEY="AIzaSyB_uHi1BV4pyknzJ_QGk1XrsaiLa4e12IQ"
-IDT=open('/tmp/idt','r').read() if False else ""
-PY
+          python3 -c "import json;d=json.load(open('/tmp/list.json'));docs=d.get('documents',[]);print('total docs:',len(docs));[print(x['name'].split('/')[-1]) for x in docs]"
+          echo "== per-line train summary =="
           for id in ginza marunouchi hibiya tozai chiyoda yurakucho hanzomon namboku fukutoshin asakusa mita shinjuku oedo; do
             curl -s --max-time 15 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents/tokyometro/$id" -H "Authorization: Bearer $IDT" -o /tmp/doc.json
-            python3 -c "
-import json
-try:
-    d=json.load(open('/tmp/doc.json'))
-except Exception as e:
-    print('$id ERR', e); raise SystemExit
-if 'error' in d:
-    print('$id', d['error'].get('message','')); raise SystemExit
-tl=d.get('fields',{}).get('trainList',{}).get('stringValue','[]')
-try:
-    trains=json.loads(tl)
-    print('$id trains:', len(trains), '| updatedAt:', d.get('fields',{}).get('updatedAt',{}).get('stringValue',''))
-    for t in trains[:3]:
-        print('   ', t.get('trainNumber'), t.get('speedClass'), 'dir', t.get('direction'), '|', t.get('pastStation'),'>',t.get('nextStation'),'| pos',t.get('trainPosition'),t.get('trainPositionFlag'),'| delay',t.get('delayTime'))
-except Exception as e:
-    print('$id trainList not json:', str(e)[:100])
-"
+            python3 -c "import json;d=json.load(open('/tmp/doc.json'));f=d.get('fields',{});tl=f.get('trainList',{}).get('stringValue','[]');trains=json.loads(tl);print('$id trains:',len(trains),'| updatedAt:',f.get('updatedAt',{}).get('stringValue',''));[print('   ',t.get('trainNumber'),t.get('speedClass'),'dir',t.get('direction'),'|',t.get('pastStation'),'>',t.get('nextStation'),'| pos',t.get('trainPosition'),t.get('trainPositionFlag'),'| delay',t.get('delayTime')) for t in trains[:3]]"
           done
