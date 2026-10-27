@@ -1,0 +1,80 @@
+name: collect-history
+
+# Delay-history collector - FULLY INDEPENDENT from bake-delays.
+#   - separate schedule (every 5 min, offset from bake's 10-min grid)
+#   - separate data dir (data/delay-history/, never touches delays.json)
+#   - commit once per day (JST 02:30), not per tick
+#
+# How "no commits during the day" works with GitHub Actions (every run is a
+# fresh checkout): the current month's file is carried between runs by the
+# Actions cache (keyed per month), so each 5-min tick only updates the file
+# in the cache. At JST 02:30 (UTC 17:30, after the last bake at JST 02:00)
+# the daily run restores the cache, writes the final month file and commits
+# it to main. Cache is repo-scoped and touched every 5 min, so it is never
+# evicted mid-month; if a cache miss ever occurs the file is rebuilt from
+# the last committed state (at most the intra-day delta since 02:30 is lost).
+
+on:
+  schedule:
+    # 运行窗口: 东京时间 05:00 - 次日 02:00 (JST = UTC+9)
+    #   JST 05:00-26:00  =  UTC 20:00-23:59 (当日) + 00:00-17:00 (次日)
+    # 每 5 分钟聚合一次 (不提交); JST 02:30 提交前一天最终文件
+    - cron: "*/5 20-23 * * *"
+    - cron: "*/5 0-16 * * *"
+    - cron: "30 17 * * *"    # JST 02:30: 提交日 (与 bake 最后一班 02:00 错开)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-history
+  cancel-in-progress: true
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Month key (JST)
+        id: month
+        run: echo "month=$(TZ=Asia/Tokyo date +%Y-%m)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore current month history (cache)
+        uses: actions/cache@v4
+        with:
+          path: data/delay-history
+          key: delay-history-${{ steps.month.outputs.month }}
+          restore-keys: |
+            delay-history-${{ steps.month.outputs.month }}
+
+      - name: Collect delay history (updates month file in place)
+        run: python -m baker.history_collector --data-dir data
+
+      - name: Save current month history (cache)
+        uses: actions/cache@v4
+        with:
+          path: data/delay-history
+          key: delay-history-${{ steps.month.outputs.month }}
+
+      - name: Commit daily file (only on the JST 02:30 run)
+        if: ${{ github.event.schedule == '30 17 * * *' }}
+        run: |
+          git config user.name "history[bot]"
+          git config user.email "history@users.noreply.github.com"
+          git add data/delay-history
+          if git diff --cached --quiet; then
+            echo "history unchanged"
+          else
+            git commit -m "delay-history: $(TZ=Asia/Tokyo date +'%Y-%m-%d') monthly file"
+            for i in 1 2 3 4 5; do
+              git pull --no-rebase -X theirs origin main && git push && break
+              echo "push retry $i"; sleep 10
+            done
+          fi
