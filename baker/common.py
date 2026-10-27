@@ -280,6 +280,13 @@ class Source:
 
         return tobuspapp.fetch(self)
 
+    def tokyu_feed(self):
+        """Tokyu tid position JSON via the Sotetsu-app external-data backend
+        (baker/tokyu.py). Offline replays the captured tokyo-*.json fixtures."""
+        from . import tokyu
+
+        return tokyu.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))
