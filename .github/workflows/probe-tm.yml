@@ -1,0 +1,35 @@
+name: probe-tokyometro-firebase
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/probe-tm.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe
+        shell: bash
+        run: |
+          set -x
+          KEY="AIzaSyB_uHi1BV4pyknzJ_QGk1XrsaiLa4e12IQ"
+          # 1) anonymous sign-in
+          IDT=$(curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY" -H 'Content-Type: application/json' -d '{"returnSecureToken":true}' | python3 -c "import sys,json;print(json.load(sys.stdin).get('idToken',''))" 2>/dev/null)
+          echo "IDT len: ${#IDT}"
+          echo "== Remote Config =="
+          curl -s --max-time 15 "https://firebaseremoteconfig.googleapis.com/v1/projects/mapp-91687/namespaces/firebase:fetchRemoteConfig?key=$KEY" -H 'Content-Type: application/json' -d '{"app_instance_id":"probe","app_id":"1:110294926089:android:f496575c8a294c884789d8","app_version":"7.2.0","country_code":"JP","language_code":"ja","package_name":"com.tokyometro"}' | head -c 2000; echo
+          echo "== RTDB root (auth) =="
+          curl -s --max-time 15 "https://mapp-91687.firebaseio.com/.json?auth=$IDT" | head -c 3000; echo
+          echo "== RTDB nodes =="
+          for n in trains train positions position train_positions trainPosition location locations operation operations status statuses lines line announcements announce config configs version metro users latest delay_history train_locations train_position home; do
+            r=$(curl -s --max-time 12 "https://mapp-91687.firebaseio.com/$n.json?auth=$IDT" | head -c 200)
+            echo "$n => $r"
+          done
+          echo "== Firestore =="
+          curl -s --max-time 15 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents?pageSize=5&key=$KEY" | head -c 2000; echo
+          echo "== RTDB noauth root =="
+          curl -s --max-time 15 "https://mapp-91687.firebaseio.com/.json" | head -c 300; echo
+          echo "== RTDB -default-rtdb variant =="
+          curl -s --max-time 15 "https://mapp-91687-default-rtdb.firebaseio.com/.json" | head -c 300; echo
+          echo "== REST legacy firebaseio root with API key param =="
+          curl -s --max-time 15 "https://mapp-91687.firebaseio.com/.json?key=$KEY" | head -c 300; echo
