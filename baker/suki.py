@@ -115,7 +115,10 @@ RAILWAY_ALIASES = {
 def norm_station(name):
     name = PAREN.sub("", name or "").strip()
     # unify the small-ke morpheme connector: 霞ヶ関 vs 霞ケ関 across datasets
-    return name.replace("ヶ", "ケ").replace("ｹ", "ケ")
+    name = name.replace("ヶ", "ケ").replace("ｹ", "ケ")
+    # cloudrail reports fullwidth digits (空港第２ビル) while suki uses
+    # halfwidth (空港第2ビル(鉄道))
+    return name.translate(str.maketrans("０１２３４５６７８９", "0123456789"))
 
 
 def line_names_for(title):
