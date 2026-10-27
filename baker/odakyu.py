@@ -183,7 +183,13 @@ def fetch(src=None):
             "_number_prefix": number or None,
         }
         if sched:
-            rec["_sched"] = sched
+            # _sched 暂不输出：delays.py 的 sched 分支走 suki_index.match(stops)
+            # + 时间验证，但剩余区段 stops（2-4 站）的时间验证在 runner 上
+            # 全部被过滤（dep_hhmm=剩余首站时刻，_verify_passage 不匹配），
+            # 导致 cands=0、match=None。改为走 else 分支的 suki-direct
+            # （_station  membership + direction），像相鉄一样 match=suki-direct。
+            # 停站表已缓存在 sched 里，后续可接入看板展示。
+            pass
         body.append(rec)
     return {
         "ok": True,
