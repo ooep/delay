@@ -115,7 +115,10 @@ RAILWAY_ALIASES = {
 def norm_station(name):
     name = PAREN.sub("", name or "").strip()
     # unify the small-ke morpheme connector: 霞ヶ関 vs 霞ケ関 across datasets
-    return name.replace("ヶ", "ケ").replace("ｹ", "ケ")
+    name = name.replace("ヶ", "ケ").replace("ｹ", "ケ")
+    # cloudrail reports fullwidth digits (空港第２ビル) while suki uses
+    # halfwidth (空港第2ビル(鉄道))
+    return name.translate(str.maketrans("０１２３４５６７８９", "0123456789"))
 
 
 def line_names_for(title):
@@ -216,6 +219,14 @@ class SukiIndex:
         "こだま": (12, 99),
         "みずほ": (0, 10),
         "さくら": (0, 20),
+        # 在来線特急 (JR-East cloudrail nickname 实测站数分布 2026-10-27)
+        "あずさ": (6, 14),   # 新宿→松本 大站停
+        "かいじ": (5, 11),  # 新宿→甲府
+        "踊り子": (5, 16),  # 東京→伊東/伊豆急下田
+        "ひたち": (10, 17),  # 品川→仙台/いわき 大站停
+        "ときわ": (14, 25),  # 品川→土浦/勝田 各停 pattern
+        "あかぎ": (4, 10),  # 上野→前橋/高崎
+        "草津・四万": (6, 14),  # 上野→長野原草津口
     }
 
     def match_direct(self, line_title, station, direction=None, train_type=None, top=3):

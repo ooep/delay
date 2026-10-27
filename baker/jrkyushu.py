@@ -176,18 +176,22 @@ def fetch(src=None):
             return None
         routes = json.loads(p.read_text())
     else:
+        from concurrent.futures import ThreadPoolExecutor
         routes = []
-        for code, line_name, station, railways in ROUTES:
-            # both directions (145M southbound lives under kbn=1), fetched
-            # per-route in parallel - never more than 2 concurrent
-            # connections, keeps the Akamai edge calm while halving latency
-            payloads = _get_both_kbns(code, station)
-            for kbn_payload in payloads:
+        def _one(route):
+            code, line_name, station, railways = route
+            out = []
+            for kbn_payload in _get_both_kbns(code, station):
                 if kbn_payload is None:
                     continue
-                payload = kbn_payload
-                if isinstance(payload, dict) and payload.get("trainPositionList"):
-                    routes.append((code, line_name, payload, railways))
+                if isinstance(kbn_payload, dict) and kbn_payload.get("trainPositionList"):
+                    out.append((code, line_name, kbn_payload, railways))
+            return out
+        # 21 routes serial was ~97s wall; 4 routes concurrent (8 requests at
+        # once) keeps the Akamai edge calm while cutting wall time ~4x.
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            for chunk in ex.map(_one, ROUTES):
+                routes.extend(chunk)
     if not routes:
         return None
     return parse_raw(routes)

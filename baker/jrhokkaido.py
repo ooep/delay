@@ -82,7 +82,10 @@ def _fetch_raw(src):
             (_offline_json(src, f"jrh-loc-{i:02d}.json")) for i in range(1, 20)
         ]
     else:
-        files = [_get_json_bom(src, LOCATION_URL.format(i)) for i in range(1, 20)]
+        from concurrent.futures import ThreadPoolExecutor
+        # 19 serial fetches were ~80s wall; 6 concurrent cuts it ~10x.
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            files = list(ex.map(lambda i: _get_json_bom(src, LOCATION_URL.format(i)), range(1, 20)))
     for d in files:
         if not d or not isinstance(d.get("trains"), list):
             continue

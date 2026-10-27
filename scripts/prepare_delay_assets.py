@@ -56,7 +56,20 @@ def main():
     os.makedirs(OUT)
 
     # data/ 内容直接放 assets 根（路由 /data/delay/* → assets 根）
-    n = copy_tree(SRC, OUT)
+    # 只复制线上前端真正消费的文件；data/suki/（40MB 每周快照缓存）
+    # 和 data/delay-history/ 是烘焙输入，不进 Worker assets，省 ~10s
+    # 打包+上传。
+    PUBLISH = [
+        'delays.json', 'sukijr.json', 'lines.json',
+        'keikyu-positions.json', 'nishitetsu-positions.json',
+    ]
+    os.makedirs(OUT, exist_ok=True)
+    n = 0
+    for f in PUBLISH:
+        src_f = os.path.join(SRC, f)
+        if os.path.isfile(src_f):
+            shutil.copy2(src_f, os.path.join(OUT, f))
+            n += 1
     with open(os.path.join(OUT, '_headers'), 'w', encoding='utf-8') as f:
         f.write(HEADERS)
     with open(os.path.join(OUT, 'robots.txt'), 'w', encoding='utf-8') as f:

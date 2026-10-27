@@ -755,6 +755,7 @@ def bake(source, data_dir):
         ("JR-Hokkaido", source.jr_hokkaido_feed),
         ("JR-Kyushu", source.jr_kyushu_feed),
         ("JR-East", source.jr_east_dokotrain_feed),
+        ("JR-East", source.jr_east_app_feed),
         ("Nankai", source.nankai_feed),
         ("Nishitetsu", source.nishitetsu_feed),
         ("JR-Central", source.jr_central_feed),
@@ -804,8 +805,13 @@ def bake(source, data_dir):
     claimed_suki = {}  # key -> train number, global uniqueness: one suki train per bake
     for op, payload in feeds:
         if not payload or not payload.get("ok"):
-            op_stats[op] = {"feed": "unavailable"}
-            print(f"feed unavailable: {op}")
+            # feeds complete in arbitrary order (as_completed); several feeds
+            # may share one operator name (JR-East: dokorail train feed +
+            # dokotrain + cloudrail app). An unavailable feed must not
+            # overwrite a sibling's successful stats written moments earlier.
+            if "trains" not in op_stats.get(op, {}):
+                op_stats[op] = {"feed": "unavailable"}
+                print(f"feed unavailable: {op}")
             continue
         body = payload.get("body") or []
         delayed = 0
@@ -924,7 +930,7 @@ def bake(source, data_dir):
                     # 跨東海道/山陽/九州全部新干线池合并候选;其他线路单池
                     lines_pool = (["東海道新幹線", "山陽新幹線", "九州新幹線"]
                                   if t.get("_train_kind") is not None
-                                  else [t["_line_ja"]])
+                                  else (t.get("_suki_pools") or [t["_line_ja"]]))
                     direct = None
                     for station in (t.get("_station_keys") or [t.get("_station")]):
                         if not station:
@@ -955,9 +961,12 @@ def bake(source, data_dir):
                             # 為基準 + 官方停站序列做站序一致性校驗；
                             # 消歧不出 → 保持多候選，by_key 只信單候選 → 不映射
                             official = None
-                            if stt and (len(direct) > 1 or official is not None):
-                                official = None
-                                if t.get("_bound") is not None and t.get("_station_code") and t.get("_train_kind"):
+                            if stt and (len(direct) > 1 or t.get("_official")):
+                                # feeds may ship their own official timetable
+                                # (jreast_app: cloudrail planArrival + remaining
+                                # stops; only used when the feed is sure of it)
+                                official = t.get("_official")
+                                if not official and t.get("_bound") is not None and t.get("_station_code") and t.get("_train_kind"):
                                     try:
                                         official = jrcentral.fetch_shinkansen_departure(
                                             source, t["_station_code"], t["_bound"],
@@ -1050,11 +1059,16 @@ def bake(source, data_dir):
                 if cands:
                     entry["suki"] = cands
             board.append(entry)
+        # multiple feeds may share an operator name (JR-East: dokotrain +
+        # cloudrail app) - accumulate per-feed stats instead of overwriting
+        prev = op_stats.get(op)
+        if not isinstance(prev, dict):
+            prev = {}
         op_stats[op] = {
-            "fetched_at": payload.get("fetchedAt"),
-            "source_time": payload.get("source_time"),
-            "trains": len(body),
-            "delayed": delayed,
+            "fetched_at": payload.get("fetchedAt") or prev.get("fetched_at"),
+            "source_time": payload.get("source_time") or prev.get("source_time"),
+            "trains": len(body) + (prev.get("trains") or 0),
+            "delayed": delayed + (prev.get("delayed") or 0),
         }
 
     board.sort(key=lambda e: (-e["delay_s"], e["railway"], e["number"] or ""))
@@ -1125,6 +1139,10 @@ def bake(source, data_dir):
                         else _hhmm_min(e.get("scheduled", {}).get("dep")),
                     }
                 )
+                # same stopping pattern, several delayed services at once:
+                # surface the worst delay (both directions must stay visible on
+                # the map; the front-end breaks the tie by dep anyway)
+                slot["delay_min"] = max(slot["delay_min"], e["delay_min"])
     # freshness: for each source, how stale the provider's data was when we
     # fetched it (fetched_at minus the provider's own latest timestamp).
     freshness = {}
@@ -1161,17 +1179,12 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
-    # sukijr.json: the strictly-one-to-one simplification the site asked for
-    # - {tmaps_key: delay_minutes}, unambiguous strong matches only.
-    # Ambiguous keys (same stopping pattern, several delayed services) stay
-    # in delays.json's by_suki_key with alternatives for time tie-breaking.
-    # Reserved header keys (version/generated_at/freshness) ride along so
-    # consumers can check data age; numeric tmaps keys never collide.
-    sukijr = {
-        k: v["delay_min"]
-        for k, v in payload["by_suki_key"].items()
-        if not v["ambiguous"]
-    }
+    # sukijr.json: the flat {tmaps_key: delay_minutes} lookup for the site.
+    # Unambiguous strong matches map directly. Ambiguous keys (same stopping
+    # pattern, several delayed services at once) are also included now -
+    # delay_min is the worst in the group, and the front-end breaks the dep
+    # tie; dropping them whole made whole directions disappear from the map.
+    sukijr = {k: v["delay_min"] for k, v in payload["by_suki_key"].items()}
     sukijr_out = {
         "version": 1,
         "generated_at": payload["generated_at"],
@@ -1188,7 +1201,7 @@ def main():
         f"delays: {payload['delayed_count']} delayed, "
         f"{with_legs} with dokorail leg, {with_suki} mapped to suki keys "
         f"({payload['matched_suki_count']} unique keys, "
-        f"{len(sukijr)} one-to-one) -> {out}"
+        f"{len(sukijr)} in sukijr.json) -> {out}"
     )
 
 
