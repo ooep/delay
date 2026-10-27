@@ -58,13 +58,39 @@ def _text(node):
     return re.sub(r"\s+", " ", node.get_text(" ", strip=True)).strip()
 
 
+def _diagram_layout(soup):
+    """Return (pos, order): pos maps popup id -> current station; order is the
+    line's stations in diagram (geographic) order. The line diagram is a
+    vertical sequence of station labels (stationFontSize) interleaved with
+    TrainMasu track cells; a track cell carrying a train icon sits at that
+    train's live position."""
+    pos = {}
+    order = []
+    last = None
+    for el in soup.find_all(True):
+        cls = el.get("class") or []
+        if "stationFontSize" in cls:
+            last = el.get_text(strip=True)
+            if last and last not in order:
+                order.append(last)
+            continue
+        oc = el.get("onclick") or ""
+        m = re.search(r"FncInformationPopup\('([^']+)'\)", oc)
+        if m and not m.group(1).startswith("station"):
+            pos.setdefault(m.group(1), last)
+    return pos, order
+
+
 def _parse_page(html):
-    """Return list of dicts: {line, type, dest, delay, stops:[{name,arr,dep}]}."""
+    """Return list of dicts: {id, line, type, dest, delay, stops:[{name,arr,dep}],
+    at: current anchor station (from the diagram) or None}."""
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
+    pos, order = _diagram_layout(soup)
     out = []
     # Japanese popups start with 列車情報; English twins start with Train Info.
     for pop in soup.select(".PopupTrainInformation"):
+        pid = (pop.get("id") or "").replace("En", "")
         head = pop.get_text(" ", strip=True)[:12]
         if "列車情報" not in head:
             continue  # skip English twin
@@ -109,8 +135,9 @@ def _parse_page(html):
                     continue
                 stops.append({"name": name, "arr": times[0],
                               "dep": times[1] if len(times) > 1 else times[0]})
-        out.append({"line": line, "type": train_type, "dest": dest,
-                    "delay": delay, "stops": stops})
+        out.append({"id": pid, "line": line, "type": train_type, "dest": dest,
+                    "delay": delay, "stops": stops, "at": pos.get(pid),
+                    "order": order})
     return out
 
 
@@ -147,39 +174,60 @@ def fetch(src=None):
             if delay < DELAY_THRESHOLD_MIN:
                 continue
             stops = tr["stops"]
-            station = stops[0]["name"] if stops else None
             line = tr["line"] or "名古屋本線"
-            # Dedup: the same physical train can appear on two segment pages
-            # (e.g. NH + TB both render 名古屋本線 through-services).
-            first_dep = stops[0]["dep"] if stops else None
-            key = (line, station, tr["dest"], tr["type"], first_dep)
+            order = tr.get("order") or []
+            # Anchor = the station the train is CURRENTLY at (from the diagram).
+            anchor = tr.get("at") or (stops[0]["name"] if stops else None)
+
+            # Remaining stops after the current position (geographic order).
+            # resolve's _stops_consistent compares the suki tail AFTER the
+            # report station against official.stations, so this must be the
+            # forward route, not origin->terminal. The diagram order runs one
+            # way; trains move either way, so infer direction from the stops
+            # endpoints' positions in the diagram.
+            def _ord(name):
+                try:
+                    return order.index(name)
+                except ValueError:
+                    return None
+            ai = _ord(anchor)
+            rem = []
+            if ai is not None and order and stops:
+                oi = _ord(stops[0]["name"])
+                ti = _ord(stops[-1]["name"])
+                increasing = (oi is not None and ti is not None and ti >= oi)
+                for s in stops:
+                    si = _ord(s["name"])
+                    if si is None:
+                        continue
+                    if (si >= ai) if increasing else (si <= ai):
+                        rem.append(s)
+            if not rem:
+                rem = stops  # fallback: whole route
+
+            anchor_dep = rem[0]["dep"] if rem else (
+                stops[0]["dep"] if stops else None)
+            key = (line, anchor, tr["dest"], tr["type"], anchor_dep)
             if key in seen:
                 continue
             seen.add(key)
-            # Official scheduled timetable -> time-anchored suki disambiguation
-            # (resolve_direct_by_time expects _official = {departure, stations,
-            # terminal} and _sched.stops; without these the multi-candidate
-            # suki-direct pool stays ambiguous and is dropped 宁漏不误报).
             off = None
-            if stops:
-                hh, mm = stops[0]["dep"].split(":")
+            if anchor_dep:
+                hh, mm = anchor_dep.split(":")
                 off = {"departure": int(hh) * 60 + int(mm),
-                       "stations": [s["name"] for s in stops],
+                       "stations": [s["name"] for s in rem],
                        "terminal": tr["dest"]}
             body.append({
-                "owl:sameAs": f"Meitetsu:{line}:{station}:{tr['dest']}",
+                "owl:sameAs": f"Meitetsu:{line}:{anchor}:{tr['dest']}",
                 "odpt:railway": f"odpt.Railway:Meitetsu.{line}",
                 "odpt:trainNumber": None,
                 "odpt:delay": delay * 60,
                 "odpt:trainType": tr["type"],
                 "_line_ja": line,
                 "_suki_line": line,
-                "_station": station,
+                "_station": anchor,
                 "_dest": tr["dest"],
                 "_direction": _direction(tr["dest"]),
-                # No _sched: providing it routes into the self-contained branch
-                # and skips suki matching. The feed's own timetable rides in
-                # _official, which the suki-direct matcher consumes to anchor.
                 "_official": off,
             })
     return {
