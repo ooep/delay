@@ -8,6 +8,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - run: |
+          set +e
           echo "=== 1) Firebase RTDB public read ==="
           for p in .json trains.json train_position.json positions.json train.json operation.json zaisen.json; do
             echo "--- mapp-91687.firebaseio.com/\$p"
