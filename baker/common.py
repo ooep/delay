@@ -456,6 +456,103 @@ class Source:
 
         return tg_rinkai.fetch(self)
 
+    def tg_chichibu_feed(self):
+        """TG-Chichibu via the keyless Tokyo Glance mirror (baker/tg_chichibu.py)."""
+        from . import tg_chichibu
+
+        return tg_chichibu.fetch(self)
+
+    def tg_kashimarinkai_feed(self):
+        """TG-KashimaRinkai via the keyless Tokyo Glance mirror (baker/tg_kashimarinkai.py)."""
+        from . import tg_kashimarinkai
+
+        return tg_kashimarinkai.fetch(self)
+
+    def tg_hitachinaka_feed(self):
+        """TG-Hitachinaka via the keyless Tokyo Glance mirror (baker/tg_hitachinaka.py)."""
+        from . import tg_hitachinaka
+
+        return tg_hitachinaka.fetch(self)
+
+    def tg_isumi_feed(self):
+        """TG-Isumi via the keyless Tokyo Glance mirror (baker/tg_isumi.py)."""
+        from . import tg_isumi
+
+        return tg_isumi.fetch(self)
+
+    def tg_shonanmonorail_feed(self):
+        """TG-ShonanMonorail via the keyless Tokyo Glance mirror (baker/tg_shonanmonorail.py)."""
+        from . import tg_shonanmonorail
+
+        return tg_shonanmonorail.fetch(self)
+
+    def tg_minatomirai_feed(self):
+        """TG-Minatomirai via the keyless Tokyo Glance mirror (baker/tg_minatomirai.py)."""
+        from . import tg_minatomirai
+
+        return tg_minatomirai.fetch(self)
+
+    def tg_hokuso_feed(self):
+        """TG-Hokuso via the keyless Tokyo Glance mirror (baker/tg_hokuso.py)."""
+        from . import tg_hokuso
+
+        return tg_hokuso.fetch(self)
+
+    def tg_toyorapid_feed(self):
+        """TG-ToyoRapid via the keyless Tokyo Glance mirror (baker/tg_toyorapid.py)."""
+        from . import tg_toyorapid
+
+        return tg_toyorapid.fetch(self)
+
+    def tg_chibamonorail_feed(self):
+        """TG-ChibaMonorail via the keyless Tokyo Glance mirror (baker/tg_chibamonorail.py)."""
+        from . import tg_chibamonorail
+
+        return tg_chibamonorail.fetch(self)
+
+    def tg_tokyomonorail_feed(self):
+        """TG-TokyoMonorail via the keyless Tokyo Glance mirror (baker/tg_tokyomonorail.py)."""
+        from . import tg_tokyomonorail
+
+        return tg_tokyomonorail.fetch(self)
+
+    def tg_yurikamome_feed(self):
+        """TG-Yurikamome via the keyless Tokyo Glance mirror (baker/tg_yurikamome.py)."""
+        from . import tg_yurikamome
+
+        return tg_yurikamome.fetch(self)
+
+    def tg_tamamonorail_feed(self):
+        """TG-TamaMonorail via the keyless Tokyo Glance mirror (baker/tg_tamamonorail.py)."""
+        from . import tg_tamamonorail
+
+        return tg_tamamonorail.fetch(self)
+
+    def tg_saitamarailway_feed(self):
+        """TG-SaitamaRailway via the keyless Tokyo Glance mirror (baker/tg_saitamarailway.py)."""
+        from . import tg_saitamarailway
+
+        return tg_saitamarailway.fetch(self)
+
+    def tg_saitamatransit_feed(self):
+        """TG-SaitamaTransit via the keyless Tokyo Glance mirror (baker/tg_saitamatransit.py)."""
+        from . import tg_saitamatransit
+
+        return tg_saitamatransit.fetch(self)
+
+    def tg_utsunomiyalrt_feed(self):
+        """TG-UtsunomiyaLRT via the keyless Tokyo Glance mirror (baker/tg_utsunomiyalrt.py)."""
+        from . import tg_utsunomiyalrt
+
+        return tg_utsunomiyalrt.fetch(self)
+
+    def tg_yokohamaseaside_feed(self):
+        """TG-YokohamaSeaside via the keyless Tokyo Glance mirror (baker/tg_yokohamaseaside.py)."""
+        from . import tg_yokohamaseaside
+
+        return tg_yokohamaseaside.fetch(self)
+
+
     def kintetsu_feed(self):
         """Kintetsu LocationWeb server-rendered pages (baker/kintetsu.py).
         Offline mode replays captured kt-w*.html fixtures."""

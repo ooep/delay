@@ -822,6 +822,22 @@ def bake(source, data_dir):
         ("TG-Izukyu", source.tg_izukyu_feed),
         ("TG-HakoneTozan", source.tg_hakonetozan_feed),
         ("TG-Rinkai", source.tg_rinkai_feed),
+        ("TG-Chichibu", source.tg_chichibu_feed),
+        ("TG-KashimaRinkai", source.tg_kashimarinkai_feed),
+        ("TG-Hitachinaka", source.tg_hitachinaka_feed),
+        ("TG-Isumi", source.tg_isumi_feed),
+        ("TG-ShonanMonorail", source.tg_shonanmonorail_feed),
+        ("TG-Minatomirai", source.tg_minatomirai_feed),
+        ("TG-Hokuso", source.tg_hokuso_feed),
+        ("TG-ToyoRapid", source.tg_toyorapid_feed),
+        ("TG-ChibaMonorail", source.tg_chibamonorail_feed),
+        ("TG-TokyoMonorail", source.tg_tokyomonorail_feed),
+        ("TG-Yurikamome", source.tg_yurikamome_feed),
+        ("TG-TamaMonorail", source.tg_tamamonorail_feed),
+        ("TG-SaitamaRailway", source.tg_saitamarailway_feed),
+        ("TG-SaitamaTransit", source.tg_saitamatransit_feed),
+        ("TG-UtsunomiyaLRT", source.tg_utsunomiyalrt_feed),
+        ("TG-YokohamaSeaside", source.tg_yokohamaseaside_feed),
     ]
     _odpt_ops = ["Toei", "Tobu", "YokohamaMunicipal"]
     if os.environ.get("ODPT_KEY", "").strip():

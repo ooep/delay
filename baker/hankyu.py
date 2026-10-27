@@ -16,8 +16,8 @@ positions[] per train: {operation_number (the real train number),
 Unlike the Hanshin slot boards, real train numbers are published, so the
 number-anchored leg match is used first; the from_station interval doubles
 as the position anchor for the position-time fallback. Emit only delayed
-trains (delay >= 1 min). 能勢電鉄 (妙見/日生) lines ride in the same feed
-via line ids 10/11.
+trains (delay >= 1 min). 能勢電鉄 (妙見/日生) has no train_position_line_id
+of its own (station master returns None), so it is not in this feed.
 """
 
 from . import common
