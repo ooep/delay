@@ -189,12 +189,20 @@ def fetch(src=None):
             stops_raw = []
             _find_stations(t, stops_raw)
             remaining = []  # [{name, plan}] for live stops after the current point
+            seen = set()
             for s in stops_raw:
                 if s.get("pass"):
                     continue
                 name = (s.get("stationName") or {}).get("ja")
                 if not name:
                     continue
+                # cloudrail nests both directions' timetable under
+                # kiten/shuten Hensei; the recursive scan picks both up, so the
+                # station sequence can loop (上野->東京->上野->東京). Keep the
+                # first run only.
+                if name in seen:
+                    break
+                seen.add(name)
                 remaining.append({
                     "name": name,
                     "plan": _hm(s.get("planArrival")) or _hm(s.get("planDeparture")),
