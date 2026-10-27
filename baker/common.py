@@ -187,6 +187,14 @@ class Source:
 
         return jreast_dokotrain.fetch(self)
 
+    def jr_east_app_feed(self):
+        """JR-East official app cloudrail feed: per-train delay for Shinkansen
+        (baker/jreast_app.py). Registers an anonymous User-ID, then reads
+        train_<line>.json (88 東北/87 上越/89 北陸/90 山形/86 秋田)."""
+        from . import jreast_app
+
+        return jreast_app.fetch(self)
+
     def nankai_feed(self):
         """Nankai app position JSON (baker/nankai.py). Offline mode replays
         the captured trains/lines fixtures."""
