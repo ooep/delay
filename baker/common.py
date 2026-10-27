@@ -287,6 +287,13 @@ class Source:
 
         return tokyu.fetch(self)
 
+    def seibu_feed(self):
+        """Seibu trainfo-api position JSON (baker/seibu.py). Offline replays
+        the captured seibu-trains.json bundle."""
+        from . import seibu
+
+        return seibu.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))
