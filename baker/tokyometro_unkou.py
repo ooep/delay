@@ -53,7 +53,7 @@ _STATE_RE = re.compile(
 )
 # Akamai 403s datacenter IPs on tokyometro.jp (verified on GitHub runners).
 # Fallback chain per page: TOKYOMETRO_BASE (user reverse proxy) -> direct ->
-# public raw proxies. First success wins; every miss degrades one hop.
+# public raw proxies (short timeout, so a dead proxy costs ~10s, not 30).
 PROXY_TEMPLATES = (
     "https://api.allorigins.win/raw?url={url}",
     "https://api.codetabs.com/v1/proxy?quest={url}",
@@ -69,11 +69,12 @@ def _page_text(src, base, slug):
     candidates = [url]
     if base != DEFAULT_BASE:
         candidates.append(f"{DEFAULT_BASE}/unkou/history/{slug}.html")
-    candidates += [t.format(url=quote(u, safe="")) for u in candidates for t in PROXY_TEMPLATES]
+    proxies = [t.format(url=quote(u, safe="")) for u in candidates for t in PROXY_TEMPLATES]
     last = None
-    for u in candidates:
+    for u in candidates + proxies:
+        timeout = 10 if "allorigins" in u or "codetabs" in u else None
         try:
-            return common.get_text(u), u
+            return common.get_text(u, timeout=timeout), u
         except Exception as exc:  # noqa: BLE001 - any miss degrades a hop
             last = exc
     return None, last

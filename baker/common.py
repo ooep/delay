@@ -75,8 +75,8 @@ def get_json(url, headers=None, retries=3):
     return json.loads(http_get(url, headers, retries=retries))
 
 
-def get_text(url, headers=None, retries=3):
-    return http_get(url, headers, retries=retries).decode("utf-8", "replace")
+def get_text(url, headers=None, retries=3, timeout=30):
+    return http_get(url, headers, retries=retries, timeout=timeout).decode("utf-8", "replace")
 
 
 def jst_now():
