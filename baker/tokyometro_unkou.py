@@ -51,30 +51,25 @@ _STATE_RE = re.compile(
     r"(\d{1,2}月\d{1,2}日\s*\d{2}:\d{2})\s*現在\s*情報更新(.{0,500}?)(?=###|\n###|履歴|注意1|過去35日間|$)",
     re.DOTALL,
 )
-# Akamai 403s datacenter IPs on tokyometro.jp (verified on GitHub runners).
-# Fallback chain per page: TOKYOMETRO_BASE (user reverse proxy) -> direct ->
-# public raw proxies (short timeout, so a dead proxy costs ~10s, not 30).
-PROXY_TEMPLATES = (
-    "https://api.allorigins.win/raw?url={url}",
-    "https://api.codetabs.com/v1/proxy?quest={url}",
-)
+# Akamai 403s datacenter IPs on tokyometro.jp (verified on GitHub runners and
+# locally). Public raw proxies (allorigins/codetabs) were probed but are not
+# reachable from the runner either, so the only route is TOKYOMETRO_BASE - a
+# user-deployed reverse proxy (Vercel/Cloudflare). Unset, the fetcher hits
+# tokyometro.jp directly, 403s fast and yields no data this run (no slow
+# fallback, so the bake stays quick and other feeds are unaffected).
 
 
 def _page_text(src, base, slug):
-    """Try the configured base, then direct, then public proxies. Returns
-    (html, via) or (None, last_error)."""
-    from urllib.parse import quote
-
+    """Try the configured base, then direct. Returns (html, via) or
+    (None, last_error)."""
     url = f"{base}/unkou/history/{slug}.html"
     candidates = [url]
     if base != DEFAULT_BASE:
         candidates.append(f"{DEFAULT_BASE}/unkou/history/{slug}.html")
-    proxies = [t.format(url=quote(u, safe="")) for u in candidates for t in PROXY_TEMPLATES]
     last = None
-    for u in candidates + proxies:
-        timeout = 10 if "allorigins" in u or "codetabs" in u else None
+    for u in candidates:
         try:
-            return common.get_text(u, timeout=timeout), u
+            return common.get_text(u), u
         except Exception as exc:  # noqa: BLE001 - any miss degrades a hop
             last = exc
     return None, last

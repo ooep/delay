@@ -323,6 +323,13 @@ class Source:
 
         return odakyu.fetch(self)
 
+    def keio_feed(self):
+        """Keio tid-platform web JSON (baker/keio.py). Offline mode replays
+        the captured keio-traffic/position/syasyu/ikisaki fixtures."""
+        from . import keio
+
+        return keio.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))
