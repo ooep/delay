@@ -251,6 +251,13 @@ class Source:
 
         return keikyu.fetch(self)
 
+    def keisei_feed(self):
+        """Keisei / Shin-Keisei zaisen JSON (baker/keisei.py). Offline mode
+        replays the captured keisei-traffic / keisei-matsudo fixtures."""
+        from . import keisei
+
+        return keisei.fetch(self)
+
     def offline_json(self, name):
         # BOM-aware: JR-Hokkaido files all start with a byte-order mark
         return json.loads((self.offline.root / name).read_text(encoding="utf-8-sig"))

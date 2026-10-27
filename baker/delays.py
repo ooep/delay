@@ -765,6 +765,7 @@ def bake(source, data_dir):
         # ODPT operators (Toei keyless; Tobu/YokohamaMunicipal keyed). Keikyu has
         # its own keyless web API (baker/keikyu.py)
         ("Keikyu", source.keikyu_feed),
+        ("Keisei", source.keisei_feed),
     ]
     _odpt_ops = ["Toei", "Tobu", "YokohamaMunicipal"]
     if os.environ.get("ODPT_KEY", "").strip():
