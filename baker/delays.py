@@ -228,6 +228,56 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
     return {"cand": c2, "scheduled": scheduled}
 
 
+def _resolve_meitetsu_relaxed(stt, suki_index, cands, station, now,
+                               delay_min, train_type, official, dest):
+    """Meitetsu-only fallback (called only after the strict time resolver
+    returns None). Nagoya Main Line packs 特急/急行/準急/普通 into 3-minute
+    windows, so the strict ±3-min unique-run test drops them. Instead we hard
+    filter on the three discriminating signals — current station + train type
+    + terminal — which selects the unique stop-pattern, then pick that pattern's
+    temporally closest run. Bounded to Meitetsu: never touches other operators.
+    Safely returns None when the pattern isn't unique (宁漏不误报)."""
+    if not stt or not station:
+        return None
+    want = suki.norm_station(station)
+    want_dest = suki.norm_station(dest) if dest else None
+    est = now.hour * 60 + now.minute - (delay_min or 0)
+    if official and official.get("departure") is not None:
+        est = official["departure"]
+    pattern_keys = []
+    for c in cands:
+        key = str(c["key"])
+        stops_n = suki_index._stops_norm.get(key)
+        if not stops_n or want not in stops_n:
+            continue
+        if want_dest and stops_n[-1] != want_dest:
+            continue
+        if not _type_compatible(stops_n, train_type):
+            continue
+        if official and not _stops_consistent(stops_n, want, official):
+            continue
+        pattern_keys.append((c, key, stops_n))
+    # require a unique stop-pattern, else stay ambiguous
+    uniq = {k for _, k, _ in pattern_keys}
+    if len(uniq) != 1:
+        return None
+    c, key, stops_n = pattern_keys[0]
+    pas = stt.passage_times(key, stops_n, want)
+    if not pas:
+        return None
+    # closest run within a generous 20-min window; require it to be a clear win
+    best = min(pas, key=lambda p: abs(p[0] - est))
+    if abs(best[0] - est) > 20:
+        return None
+    dep0 = best[1]
+    stops = suki_index.trains[key]["s_jas"]
+    c2 = dict(c)
+    c2["size"] = len(stops)
+    return {"cand": c2, "scheduled": {
+        "dep": f"{dep0 // 60:02d}:{dep0 % 60:02d}",
+        "origin": stops[0], "stops": stops}}
+
+
 def _collapse_by_time(stt, suki_index, cands, station, now, delay_min,
                       tol=10, leg_stops=None, dep_feed=None):
     """Collapse station-sequence-identical suki candidates (loop lines run
@@ -1052,6 +1102,16 @@ def bake(source, data_dir):
                                     entry.get("type"), official=official,
                                     dest=t.get("_dest"),
                                 )
+                                if not resolved and op == "Meitetsu":
+                                    # Bounded fallback: current station + type +
+                                    # terminal selects the unique stop-pattern,
+                                    # then closest run. Only Meitetsu.
+                                    resolved = _resolve_meitetsu_relaxed(
+                                        stt, suki_index, direct,
+                                        t["_station"], now,
+                                        round(delay / 60),
+                                        entry.get("type"), official,
+                                        dest=t.get("_dest"))
                                 if resolved:
                                     rk = str(resolved["cand"]["key"])
                                     # global uniqueness: a suki train can only be
