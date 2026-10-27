@@ -1,4 +1,4 @@
-name: probe-tokyometro-firebase
+name: probe-tokyometro-firestore
 on:
   workflow_dispatch:
   push:
@@ -15,12 +15,16 @@ jobs:
           KEY="AIzaSyB_uHi1BV4pyknzJ_QGk1XrsaiLa4e12IQ"
           IDT=$(curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY" -H 'Content-Type: application/json' -d '{"returnSecureToken":true}' | python3 -c "import sys,json;print(json.load(sys.stdin).get('idToken',''))" 2>/dev/null)
           echo "IDT len: ${#IDT}"
-          echo "== Firestore root (Bearer) =="
-          curl -s --max-time 20 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents?pageSize=20" -H "Authorization: Bearer $IDT" | head -c 4000; echo
-          echo "== Firestore lines =="
-          for c in lines map errors trains train positions announcements config; do
-            r=$(curl -s --max-time 15 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents/$c?pageSize=3" -H "Authorization: Bearer $IDT" | head -c 500)
-            echo "$c => $r"; echo
+          echo "== list tokyometro (Bearer) =="
+          curl -s --max-time 20 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents/tokyometro?pageSize=50" -H "Authorization: Bearer $IDT" | head -c 6000; echo
+          echo "== list tokyometro (key only, no auth) =="
+          curl -s --max-time 20 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents/tokyometro?pageSize=50&key=$KEY" | head -c 6000; echo
+          echo "== doc tokyometro/ginza (Bearer) =="
+          curl -s --max-time 15 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents/tokyometro/ginza" -H "Authorization: Bearer $IDT" | head -c 8000; echo
+          echo "== doc tokyometro/ginza (key only) =="
+          curl -s --max-time 15 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents/tokyometro/ginza?key=$KEY" | head -c 8000; echo
+          echo "== docs all lines (Bearer) =="
+          for id in marunouchi hibiya tozai chiyoda yurakucho hanzomon namboku fukutoshin asakusa mita shinjuku oedo toei_api_status; do
+            r=$(curl -s --max-time 12 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents/tokyometro/$id" -H "Authorization: Bearer $IDT" | head -c 200)
+            echo "$id => $r"; echo
           done
-          echo "== Firestore document lines/ginza =="
-          curl -s --max-time 15 "https://firestore.googleapis.com/v1/projects/mapp-91687/databases/(default)/documents/lines/ginza" -H "Authorization: Bearer $IDT" | head -c 3000; echo
