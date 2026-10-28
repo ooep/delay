@@ -117,18 +117,27 @@ def parse_raw(data):
         number = str(t.get("TrainNum") or t.get("TrainNumber") or "")
         if not railway or not number:
             continue
+        line_code = str(t.get("Line") or t.get("line") or "").split("_")[0]
         delay_sec = _delay_to_seconds(t.get("delay"))
         prev = by_number.get(number)
         if prev is not None:
             if delay_sec > prev["odpt:delay"]:
                 prev["odpt:delay"] = delay_sec
                 prev["_railway"] = railway
-                prev["_station"] = t.get("Pos") or prev.get("_station")
+                pos = t.get("Pos")
+                if pos:
+                    # 位置与线路必须同源更新: 只换 _station 会让锚点停留在
+                    # 上一段（9290H: keys=多度津 / station=土佐岩原～豊永），
+                    # suki-direct 拿旧站去匹配另一条线 → 0 候选
+                    prev["_station"] = pos
+                    prev["_station_keys"] = _station_keys(pos)
+                prev["_line_ja"] = LINE_JA.get(line_code) or prev.get("_line_ja")
+                prev["odpt:railway"] = "odpt.Railway:" + railway
+                prev["_railways"] = sorted(set(prev["_railways"]) | {railway})
             continue
         raw_type = str(t.get("Type") or "").strip()
         kind, _, nickname = raw_type.partition(":")
         kind = KIND_NAMES.get(kind.strip(), kind.strip()) or None
-        line_code = str(t.get("Line") or t.get("line") or "").split("_")[0]
         entry = {
             "owl:sameAs": f"JR-Shikoku:{railway}.{number}",
             "odpt:railway": "odpt.Railway:" + railway,

@@ -124,6 +124,22 @@ def _hhmm_min(hhmm):
         return None
 
 
+def _direct_candidates(suki_index, lines, station, direction, train_type, railway):
+    """match_direct over several suki pools, deduped by key (top must cover
+    the whole pool: candidates are sorted by stop count, so a 12-stop
+    through train would otherwise be pushed out by short patterns)."""
+    merged = []
+    for ln in lines:
+        merged += suki_index.match_direct(
+            ln, station, direction, train_type, top=256, railway=railway) or []
+    seen, out = set(), []
+    for c in merged:
+        if c["key"] not in seen:
+            seen.add(c["key"])
+            out.append(c)
+    return out
+
+
 def _match_candidates(suki_index, stations, line, railway, top):
     """suki_index.match() with composite-line fallback (中央本線・篠ノ井線).
 
@@ -1338,23 +1354,23 @@ def bake(source, data_dir):
                     for station in (t.get("_station_keys") or [report_station]):
                         if not station:
                             continue
-                        merged = []
-                        # top 须覆盖全池: 候选按站数升序截断, 12 站全程车
-                        # (7237/193) 若 top 太小会被小站数车挤出, 导致宁漏
-                        for ln in lines_pool:
-                            merged += suki_index.match_direct(
-                                ln, station, direction,
-                                entry.get("type"), top=256,
-                                railway=railway,
-                            ) or []
-                        seen = set()
-                        direct = []
-                        for c in merged:
-                            if c["key"] not in seen:
-                                seen.add(c["key"])
-                                direct.append(c)
+                        direct = _direct_candidates(
+                            suki_index, lines_pool, station, direction,
+                            entry.get("type"), railway)
                         if direct:
                             break
+                        # feed 的线路标签与实跑线路不一致（宮崎空港線直通车在
+                        # 日豊本線浅海井上报站、予讃線コードが土讃線区間を
+                        # 報告）。仅当该站名在 suki 里只属于唯一一条线路池时
+                        # 才用该池重试——多池站点可能是跨运营方同名站
+                        # （新宿/高松），不做兜底，维持宁漏不误报。
+                        pools = suki_index.pools_for_station(station)
+                        if len(pools) == 1:
+                            direct = _direct_candidates(
+                                suki_index, pools, station, direction,
+                                entry.get("type"), railway)
+                            if direct:
+                                break
                     if direct:
                             # the fragment that produced the candidates is the
                             # real reported station ("繁藤～新改" sections);

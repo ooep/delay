@@ -153,6 +153,13 @@ RAILWAY_ALIASES = {
 }
 
 
+# 同一駅の別名: 京王/都営新宿線のホーム名「新線新宿」は suki 側では新宿で
+# 保持されている。alias しないと 5874A のような直通列車が駅名一致で全滅する。
+STATION_ALIASES = {
+    "新線新宿": "新宿",
+}
+
+
 def norm_station(name):
     name = PAREN.sub("", name or "").strip()
     # unify the small-ke morpheme connector: 霞ヶ関 vs 霞ケ関 across datasets
@@ -160,7 +167,8 @@ def norm_station(name):
     # cloudrail reports fullwidth digits (空港第２ビル) while suki uses
     # halfwidth (空港第2ビル(鉄道)); JR-West's train-guide sends fullwidth
     # ＪＲ station names (ＪＲ三山木) where suki stores JR三山木
-    return name.translate(_FW2HW)
+    name = name.translate(_FW2HW)
+    return STATION_ALIASES.get(name, name)
 
 
 def line_names_for(title):
@@ -186,6 +194,11 @@ class SukiIndex:
         for k, e in tmaps.items():
             for line in e["lines"]:
                 self._line_pool.setdefault(line, []).append(k)
+        self._station_lines = {}
+        for k, stops in self._stops_norm.items():
+            for line in tmaps[k]["lines"]:
+                for s in set(stops):
+                    self._station_lines.setdefault(s, set()).add(line)
 
     @classmethod
     def load(cls, data_dir):
@@ -283,6 +296,10 @@ class SukiIndex:
         "あかぎ": (4, 10),  # 上野→前橋/高崎
         "草津・四万": (6, 14),  # 上野→長野原草津口
     }
+
+    def pools_for_station(self, station):
+        """suki line names whose trains stop at `station` (normalized)."""
+        return set(self._station_lines.get(norm_station(station), ()))
 
     def match_direct(self, line_title, station, direction=None, train_type=None,
                      top=3, railway=None):
