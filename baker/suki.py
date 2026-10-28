@@ -108,8 +108,10 @@ TITLE_ALIASES = {
     # JR-West nicknames
     "嵯峨野線": {"山陰本線"},
     "宇野みなと線": {"宇野線"},
-    # 京成 uses the formal 成田空港線 for 成田スカイアクセス
-    "成田スカイアクセス線": {"成田空港線"},
+    # 京成 uses the formal 成田空港線 for 成田スカイアクセス, but its
+    # 印旛日本医大/印西牧の原 turning trains only exist in suki as 北総線
+    # patterns (keisei SVG reports them under the Sky Access blocks)
+    "成田スカイアクセス線": {"成田空港線", "北総線"},
     "都営浅草線": {"都営地下鉄浅草線", "浅草線"},
     "函館市電": {"函館市電本線"},
 }
@@ -147,7 +149,7 @@ RAILWAY_ALIASES = {
     "TokyoMetro.Fukutoshin": {"東京メトロ副都心線", "副都心線"},
     "TokyoMetro.Asakusa": {"都営地下鉄浅草線", "浅草線"},
     "Seibu.Shinjuku": {"西武新宿線"},
-    "Keisei.NaritaSkyAccess": {"成田空港線"},
+    "Keisei.NaritaSkyAccess": {"成田空港線", "北総線"},
     "Meitetsu.空港線": {"名鉄空港線"},
     "HakodateTram": {"函館市電本線"},
 }
