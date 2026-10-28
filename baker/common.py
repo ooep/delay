@@ -552,6 +552,13 @@ class Source:
 
         return tg_yokohamaseaside.fetch(self)
 
+    def tg_shibayama_feed(self):
+        """TG-Shibayama via the keyless Tokyo Glance mirror (baker/tg_shibayama.py)."""
+        from . import tg_shibayama
+
+        return tg_shibayama.fetch(self)
+
+
 
     def kintetsu_feed(self):
         """Kintetsu LocationWeb server-rendered pages (baker/kintetsu.py).
