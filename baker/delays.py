@@ -180,39 +180,60 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
     else:
         est = now.hour * 60 + now.minute - (delay_min or 0)
     want = suki.norm_station(station)
-    scored = []
     want_dest = suki.norm_station(dest) if dest else None
-    for c in cands:
-        key = str(c["key"])
-        stops_n = suki_index._stops_norm[key]
-        # terminus must match the feed's reported destination when known -
-        # collapses commuter pools (local to 君津 vs rapid to 館山).
-        # Origin is NOT filtered: live feed may only see a through-service
-        # mid-route (BCD subset of suki's ABCD) - station order is already
-        # guaranteed by match_direct's direction filter.
-        if want_dest and stops_n and stops_n[-1] != want_dest:
-            continue
-        # suki names carry prefecture qualifiers (高松(香川県)) while live
-        # feeds report the bare station (高松) - same suffixed-variant rule
-        # as match_direct, inside the line-filtered pool
-        if want not in stops_n and not suki_index._has_pref_suffixed(stops_n, want):
-            continue
-        if not _type_compatible(stops_n, train_type):
-            continue
-        if official is not None and not _stops_consistent(stops_n, want, official, max_extra):
-            continue
-        anchor = want if want in stops_n else next(
-            s for s in stops_n
-            if s.startswith(want) and s[len(want):].endswith(("都", "道", "府", "県"))
-        )
-        pas = stt.passage_times(key, stops_n, anchor)
-        if not pas:
-            continue
-        near = [p for p in pas if abs(p[0] - est) <= tol]
-        if len(near) != 1:
-            continue
-        arrive, dep0 = near[0]
-        scored.append((abs(arrive - est), c, key, arrive, dep0))
+    scored = []
+    for relaxed in (False, True):
+        # cloudrail 只发布 planArrival(到站),严格口径比的却是 passage_times
+        # (发车);始发/长停站差一个 dwell,整列车会被推出窗口。发车口径全灭
+        # 时补一轮 ±1 的『到达或发车』比对。放宽窗口里同一模式若出现两趟,
+        # 说明该模式自身有歧义,整轮证据作废(宁漏不误报)。
+        if relaxed and (official is None or official.get("departure") is None):
+            break
+        scored = []
+        veto = False
+        for c in cands:
+            key = str(c["key"])
+            stops_n = suki_index._stops_norm[key]
+            # terminus must match the feed's reported destination when known -
+            # collapses commuter pools (local to 君津 vs rapid to 館山).
+            # Origin is NOT filtered: live feed may only see a through-service
+            # mid-route (BCD subset of suki's ABCD) - station order is already
+            # guaranteed by match_direct's direction filter.
+            if want_dest and stops_n and stops_n[-1] != want_dest:
+                continue
+            # suki names carry prefecture qualifiers (高松(香川県)) while live
+            # feeds report the bare station (高松) - same suffixed-variant rule
+            # as match_direct, inside the line-filtered pool
+            if want not in stops_n and not suki_index._has_pref_suffixed(stops_n, want):
+                continue
+            if not _type_compatible(stops_n, train_type):
+                continue
+            if official is not None and not _stops_consistent(stops_n, want, official, max_extra):
+                continue
+            anchor = want if want in stops_n else next(
+                s for s in stops_n
+                if s.startswith(want) and s[len(want):].endswith(("都", "道", "府", "県"))
+            )
+            if relaxed:
+                near = [(min(abs(a - est), abs(d - est)), p)
+                        for a, d, p in stt.stop_times(key, stops_n, anchor)
+                        if abs(a - est) <= 1 or abs(d - est) <= 1]
+                if len(near) > 1:
+                    veto = True
+                    break
+                if near:
+                    scored.append((near[0][0], c, key, near[0][1]))
+                continue
+            pas = stt.passage_times(key, stops_n, anchor)
+            near = [p for p in pas if abs(p[0] - est) <= tol] if pas else []
+            if len(near) != 1:
+                continue
+            arrive, dep0 = near[0]
+            scored.append((abs(arrive - est), c, key, dep0))
+        if veto:
+            scored = []
+        if scored:
+            break
     if not scored:
         return None
     scored.sort(key=lambda x: x[0])
@@ -220,7 +241,7 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
     # candidate is close. Otherwise require >2 min gap from runner-up.
     if scored[0][0] > 0 and len(scored) >= 2 and scored[1][0] - scored[0][0] <= 2:
         return None
-    gap, cand, key, arrive, dep0 = scored[0]
+    gap, cand, key, dep0 = scored[0]
     if gap > tol:
         return None
     stops = suki_index.trains[key]["s_jas"]
