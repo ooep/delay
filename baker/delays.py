@@ -124,6 +124,30 @@ def _hhmm_min(hhmm):
         return None
 
 
+def _match_candidates(suki_index, stations, line, railway, top):
+    """suki_index.match() with composite-line fallback (中央本線・篠ノ井線).
+
+    suki tags trains with individual line names, so a composite feed title
+    has no pool of its own. Parts are *merged*, not first-hit-wins: a leg on
+    the second line (飯山線 十日町→森宮野原) matches a through pattern tagged
+    with both lines (4224 → 長野, extra=20) under the first part, which hid
+    the exact 9-stop pattern under the second (3583, extra=0). The merged
+    list uses match()'s own ranking so exact patterns surface first."""
+    cs = suki_index.match(stations, line, railway=railway, top=top)
+    if cs or not line or "・" not in line:
+        return cs
+    merged, seen = [], set()
+    for part in line.split("・"):
+        for c in suki_index.match(stations, part, railway=railway, top=top):
+            k = str(c["key"])
+            if k in seen:
+                continue
+            seen.add(k)
+            merged.append(c)
+    merged.sort(key=lambda c: (c["fuzzy"], -c["overlap"], abs(c["extra"])))
+    return merged
+
+
 def _verify_passage(suki_index, stt, cands, origin_station, dep_hhmm, tol=5):
     """Time-verify suki candidates at the leg's origin station, using each
     candidate's *passage time there* instead of its own dep minute.
@@ -1406,18 +1430,9 @@ def bake(source, data_dir):
                         "stops": stations,
                     }
             if stations:
-                cands = suki_index.match(
-                    stations, suki_line, railway=railway, top=MATCH_TOP
+                cands = _match_candidates(
+                    suki_index, stations, suki_line, railway, MATCH_TOP
                 )
-                if not cands and suki_line and "・" in suki_line:
-                    # composite dokotrain groups (中央本線・篠ノ井線): suki tags
-                    # trains with the individual line names - retry per part
-                    for part in suki_line.split("・"):
-                        cands = suki_index.match(
-                            stations, part, railway=railway, top=MATCH_TOP
-                        )
-                        if cands:
-                            break
                 # 环线线路(山手線等):match() 默认 top=3 按站序差截断,会把
                 # 双圈高频 key(11011/11016,extra=30)挤出候选池,只剩单圈
                 # 低频 key(8356/10245)与部分环(10891/10594)。但主站时刻表
@@ -1433,8 +1448,8 @@ def bake(source, data_dir):
                     and stops_n[0] == stops_n[-1]
                     for c in cands
                 ):
-                    cands = suki_index.match(
-                        stations, suki_line, railway=railway, top=256
+                    cands = _match_candidates(
+                        suki_index, stations, suki_line, railway, 256
                     )
                 if cands and stt:
                     # time-verify: keep only keys that actually run at this
