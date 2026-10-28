@@ -34,6 +34,11 @@ FEED_FETCH_WORKERS = 12
 # 新干线等无 dokorail 时刻表的线路，用 suki 时刻表把多候选收敛为唯一班次；
 # 收敛必须严格（窗口内唯一趟 + 唯一 key + 车种特征吻合），否则宁漏不误报。
 DIRECT_TIME_TOLERANCE_MIN = 3
+# 单候选模式的观测滞后容差:报站只命中一个停站模式时(车种/终点/方向已
+# 筛过)，feed 页面刷新滞后会让 now-delay 比表定晚几分钟。只有同一模式
+# 前后班次相距足够远、最近那趟仍然唯一时，才允许超出上面的 ±3 分钟窗。
+SINGLETON_STALE_TOLERANCE_MIN = 6
+SINGLETON_RUN_SEPARATION_MIN = 8
 
 
 def _type_compatible(stops_norm, train_type):
@@ -384,6 +389,35 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
             scored = []
         if scored:
             break
+    if not scored and official is None:
+        # 报站命中多个模式、但「终点+报告站+车种」筛完只剩一个，严格窗口
+        # 却没对上：多半是 feed 页面刷新滞后把 now-delay 推后了几分钟。
+        # 同一模式前后班次间距远大于滞后误差时，最近那趟仍然唯一。
+        surv = []
+        for c in cands:
+            stops_n = suki_index._stops_norm[str(c["key"])]
+            if want_dest and stops_n and stops_n[-1] != want_dest:
+                continue
+            if want not in stops_n and not suki_index._has_pref_suffixed(stops_n, want):
+                continue
+            if not _type_compatible(stops_n, train_type):
+                continue
+            surv.append((c, stops_n))
+        if len(surv) == 1:
+            c, stops_n = surv[0]
+            key = str(c["key"])
+            anchor = want if want in stops_n else next(
+                s for s in stops_n
+                if s.startswith(want) and s[len(want):].endswith(("都", "道", "府", "県"))
+            )
+            near = sorted(
+                (abs(p[0] - est), p) for p in stt.passage_times(key, stops_n, anchor) or []
+            )
+            if near and near[0][0] <= SINGLETON_STALE_TOLERANCE_MIN and (
+                    len(near) == 1
+                    or near[1][0] - near[0][0] >= SINGLETON_RUN_SEPARATION_MIN):
+                scored.append((near[0][0], c, key, near[0][1][1]))
+                tol = SINGLETON_STALE_TOLERANCE_MIN
     if not scored:
         return None
     scored.sort(key=lambda x: x[0])
