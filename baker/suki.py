@@ -100,9 +100,24 @@ TITLE_ALIASES = {
     # 仙台空港アクセス線 (formal name used by doko-train feeds) vs the
     # short name suki data tags it with
     "仙台空港アクセス線": {"仙台空港線", "仙台空港アクセス線"},
+    # JR-East service names that have no line of their own in suki data
+    "成田エクスプレス": {"総武本線", "横須賀線", "成田線", "東海道本線"},
+    "埼京線": {"東北本線", "赤羽線", "山手線"},
+    "山形新幹線": {"奥羽本線"},
+    "秋田新幹線": {"奥羽本線", "田沢湖線"},
+    # JR-West nicknames
+    "嵯峨野線": {"山陰本線"},
+    "宇野みなと線": {"宇野線"},
+    # 京成 uses the formal 成田空港線 for 成田スカイアクセス
+    "成田スカイアクセス線": {"成田空港線"},
+    "都営浅草線": {"都営地下鉄浅草線", "浅草線"},
+    "函館市電": {"函館市電本線"},
 }
 
 # RAILWAY_ALIASES: titles that collide across operators resolve by railway id.
+# When a railway is listed here its set is authoritative: TITLE_ALIASES is
+# skipped for that call, so 奈良線 cannot leak 近鉄奈良線 into JR-West (and
+# vice versa the bare 新宿線/空港線/東西線 cannot cross operators).
 RAILWAY_ALIASES = {
     "JR-East.Nikko": {"jr日光線"},
     "Tobu.Nikko": {"東武日光線"},
@@ -113,8 +128,28 @@ RAILWAY_ALIASES = {
     "Keikyu.Airport": {"京急空港線"},
     "Toei.Mita": {"都営地下鉄三田線"},
     "Toei.Shinjuku": {"都営地下鉄新宿線"},
+    "Toei.Asakusa": {"都営地下鉄浅草線", "浅草線"},
     "JR-West.Nara": {"jr奈良線"},
+    "JR-West.SaninMain": {"山陰本線"},
+    "JR-West.UnoPort": {"宇野線"},
     "Tobu.Kinugawa": {"東武鬼怒川線"},
+    # Tokyo Metro tags most keys with the operator prefix (東京メトロ東西線),
+    # while dokorail titles are the bare line name - bridge per railway so
+    # bare 東西線/南北線/有楽町線 cannot hit another operator's line.
+    "TokyoMetro.Tozai": {"東京メトロ東西線"},
+    "TokyoMetro.Namboku": {"東京メトロ南北線"},
+    "TokyoMetro.Yurakucho": {"東京メトロ有楽町線", "有楽町線"},
+    "TokyoMetro.Ginza": {"東京メトロ銀座線", "銀座線"},
+    "TokyoMetro.Marunouchi": {"東京メトロ丸ノ内線", "丸ノ内線"},
+    "TokyoMetro.Hibiya": {"東京メトロ日比谷線", "日比谷線"},
+    "TokyoMetro.Chiyoda": {"東京メトロ千代田線", "千代田線"},
+    "TokyoMetro.Hanzomon": {"東京メトロ半蔵門線", "半蔵門線"},
+    "TokyoMetro.Fukutoshin": {"東京メトロ副都心線", "副都心線"},
+    "TokyoMetro.Asakusa": {"都営地下鉄浅草線", "浅草線"},
+    "Seibu.Shinjuku": {"西武新宿線"},
+    "Keisei.NaritaSkyAccess": {"成田空港線"},
+    "Meitetsu.空港線": {"名鉄空港線"},
+    "HakodateTram": {"函館市電本線"},
 }
 
 
@@ -169,9 +204,16 @@ class SukiIndex:
             return cls({}, None)
 
     def _expand(self, names, railway=None):
+        scoped = RAILWAY_ALIASES.get(railway) if railway else None
+        if scoped:
+            # railway-scoped aliases are authoritative: 奈良線 at JR-West is
+            # jr奈良線, never 近鉄奈良線; bare 新宿線/東西線/空港線 stay
+            # inside their operator
+            out = set(scoped)
+            for n in scoped:
+                out |= self.aliases.get(n, set())
+            return out
         out = set()
-        if railway:
-            out |= RAILWAY_ALIASES.get(railway, set())
         for n in names:
             out |= self.aliases.get(n, set()) | {n}
             for base in line_names_for(n):
@@ -242,16 +284,19 @@ class SukiIndex:
         "草津・四万": (6, 14),  # 上野→長野原草津口
     }
 
-    def match_direct(self, line_title, station, direction=None, train_type=None, top=3):
+    def match_direct(self, line_title, station, direction=None, train_type=None,
+                     top=3, railway=None):
         """Direct suki matching for feeds whose lines have no dokorail
         timetable (shinkansen bundles are empty shells). Filters: line name,
         station membership, direction (feed "down"/"up" vs the entry's
         terminal order) and a stop-count bucket from the service type.
+        railway scopes line aliases exactly like match(): bare 新宿線 at
+        Seibu.Shinjuku is 西武新宿線, never 都営新宿線.
         Returns [{key, direct: True, overlap, size}] - callers should only
         trust a single-candidate result."""
         if not line_title or not station:
             return []
-        want = self._expand(line_names_for(line_title))
+        want = self._expand(line_names_for(line_title), railway)
         target = norm_station(station)
         # 跨线全程车(東京→博多 のぞみ 等)始发站可能是任一北端(東京/新大阪/博多),
         # 方向判断用全线北端并集,不能用本线路北端(否则漏掉跨线下行车)
