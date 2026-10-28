@@ -6,24 +6,25 @@ https://igr.jorudan.biz/ja/ whose loadjson.min.js pulls:
     GET https://igr.jorudan.biz/contents/realtime_info.json
     GET https://igr.jorudan.biz/contents/oshirase.json
 
-Shape (observed 2026-10-28 01:26 JST, out of service):
-    {"errors": [],
-     "filedate": {"ja": "2026年10月28日 01時26分36秒", ...},
-     "datas": []}
+Shape (verified 2026-10-28 10:12 JST, in service):
+    {"errors": [...],
+     "filedate": {"ja": "...", "en": "...", ...},
+     "datas": [ {disp_no, disp_name: "盛岡", direction: 0|1, div_id,
+                 datas: [ {line_no, rec_datetime, win_no,
+                           dely_time_min: <int minutes>,
+                           timetable: {line_no,
+                                       current_st_ml: {ja,en,cn,tw,ko},
+                                       dely_time_str: {ja,...},
+                                       dely_time: <int minutes>,
+                                       line_kubun_ml: {ja: "普通", ...},
+                                       shuten_ml: {ja: "金田一温泉行", ...},
+                                       stations: [...]} } ] } ]}
 
-During service, datas[] is a list of line groups, each:
-    {line_kubun_ml: "青い森鉄道線 (目時)",
-     datas: [ {line_no, direction: 0|1,          # 0=down arrow, 1=up arrow
-               dely_time_min: <int minutes>,     # yellow >=1, red >=30
-               dely_time, dely_time_str,
-               current_st_ml: "<現在位置 駅名>",
-               shuten_ml: "<終着 駅名>",
-               dep_time, arr_time, is_passed, div_id, png} ]}
-
-Delay is whole minutes; we emit seconds = dely_time_min * 60, filtered to
->= 60 s. direction 1 = 上り (盛岡方面), 0 = 下り (目時・青い森方面) per the
-frontend's arrow-icon array order. Out-of-service hours leave datas=[] —
-empty body is then the honest answer.
+Realtime fields live under "timetable" as multi-lang dicts; direction sits on
+the line group, not the train record. Delay is whole minutes; we emit seconds
+= dely_time * 60, filtered to >= 60 s. direction 1 = 上り (盛岡方面),
+0 = 下り (目時・青い森方面) per the frontend's arrow-icon array order.
+Out-of-service hours leave datas=[] — empty body is then the honest answer.
 """
 
 import json
@@ -37,6 +38,13 @@ UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
       "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
 
 DELAY_THRESHOLD_SEC = 60
+
+
+def _ja(v):
+    """JORUDAN multi-lang object {ja,en,cn,tw,ko} — or a plain string."""
+    if isinstance(v, dict):
+        return v.get("ja") or v.get("en") or ""
+    return v or ""
 
 
 def _get_json(url, retries=2):
@@ -73,27 +81,36 @@ def fetch(src=None):
     for group in payload.get("datas") or []:
         if not isinstance(group, dict):
             continue
+        grp_dir = group.get("direction")
         for tr in group.get("datas") or []:
             if not isinstance(tr, dict):
                 continue
-            delay_min = int(tr.get("dely_time_min") or 0)
+            # Live shape: realtime fields nested under "timetable" as
+            # multi-lang dicts; keep a flat fallback for the old shape.
+            tbl = tr.get("timetable") if isinstance(tr.get("timetable"), dict) else tr
+            raw_delay = tbl.get("dely_time")
+            if raw_delay is None:
+                raw_delay = tr.get("dely_time_min")
+            delay_min = int(raw_delay or 0)
             delay_sec = delay_min * 60
             if delay_sec < DELAY_THRESHOLD_SEC:
                 continue
-            cur = tr.get("current_st_ml")
+            cur = _ja(tbl.get("current_st_ml"))
             if not cur:
                 continue
-            direction = tr.get("direction")
+            line_no = tr.get("line_no") or tbl.get("line_no")
+            direction = grp_dir if grp_dir is not None else tr.get("direction")
+            train_type = _ja(tbl.get("line_kubun_ml")) or "普通"
             body.append({
-                "owl:sameAs": f"IGR:{tr.get('line_no')}:{cur}",
+                "owl:sameAs": f"IGR:{line_no}:{cur}",
                 "odpt:railway": "odpt.Railway:IwateGalaxy.IwateGalaxy",
-                "odpt:trainNumber": str(tr.get("line_no") or ""),
+                "odpt:trainNumber": str(line_no or ""),
                 "odpt:delay": delay_sec,
-                "odpt:trainType": "普通",
+                "odpt:trainType": train_type,
                 "_line_ja": "いわて銀河鉄道線",
                 "_suki_line": "いわて銀河鉄道線",
                 "_station": cur,
-                "_dest": tr.get("shuten_ml"),
+                "_dest": _ja(tbl.get("shuten_ml")) or None,
                 # frontend arrow array: index 0 = arrow_down (下り),
                 # index 1 = arrow_up (上り)
                 "_direction": "上り" if direction == 1 else (
