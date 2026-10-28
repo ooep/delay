@@ -32,13 +32,10 @@ class SukiTimetable:
     """key -> sorted dep-minute list for the day's calendar, plus the full
     run/dwell series per key (for passage-time lookups by station)."""
 
-    def __init__(self, runs_by_key, series_by_key, source_file, express_keys=None):
+    def __init__(self, runs_by_key, series_by_key, source_file):
         self.runs = runs_by_key
         self._series = series_by_key
         self.source_file = source_file
-        # 特急班次集合(数据源 i=='特' 的 key)：どこトレ 等把特急套用在来線
-        # 普通停站模板导致站序匹配错位时，用 dep0±tol 在这里决胜
-        self.express_keys = set(express_keys or [])
 
     @classmethod
     def load(cls, data_dir, weekday):
@@ -51,13 +48,10 @@ class SukiTimetable:
             return None
         runs = {}
         series = {}
-        express_keys = set()
         for t in d.get("T") or []:
             if not isinstance(t, dict):
                 continue
             key = str(t.get("t"))
-            if t.get("i") == "特":
-                express_keys.add(key)
             parts = str(t.get("s") or "").split(",")
             try:
                 nums = [int(x) for x in parts if x != ""]
@@ -76,7 +70,7 @@ class SukiTimetable:
             )
         for lst in runs.values():
             lst.sort()
-        return cls(runs, series, p.name, express_keys=express_keys)
+        return cls(runs, series, p.name)
 
     def passage_times(self, key, stops, station):
         """Arrival minute at `station` for every run of `key`.
@@ -105,6 +99,40 @@ class SukiTimetable:
                 if i < len(dwells):
                     acc += dwells[i]
             out.append((acc, dep0))
+        out.sort()
+        return out
+
+    def stop_times(self, key, stops, station):
+        """(arrival, departure, origin_dep) per run at `station`.
+
+        Site's parseTrip(): arr[i]=dep[i-1]+run_i, dep[i]=arr[i]+dwell_i
+        (terminal has no dwell). The `s` series is dep0,run1,dwell1,... so
+        runs[i]=run_{i+1} and dwells[i]=dwell_{i+1}; a station's own dwell
+        belongs to its departure, never to its arrival.
+        """
+        recs = self._series.get(str(key))
+        if not recs or station not in stops:
+            return []
+        idx = stops.index(station)
+        out = []
+        for r in recs:
+            dep0 = r["dep0"]
+            runs = r["runs"]
+            dwells = r.get("dwells") or []
+            if idx > len(runs):
+                continue
+            acc = dep0
+            for i in range(idx):
+                acc += runs[i]
+                if i < idx - 1:
+                    acc += dwells[i]
+            if idx == 0:
+                dep = dep0
+            elif idx <= len(dwells):
+                dep = acc + dwells[idx - 1]
+            else:
+                dep = acc
+            out.append((acc, dep, dep0))
         out.sort()
         return out
 

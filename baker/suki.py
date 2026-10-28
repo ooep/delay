@@ -24,6 +24,12 @@ from pathlib import Path
 PAREN = re.compile(r"\s*[(（].*$")
 JR_PREFIX = re.compile(r"^JR")
 
+_FW2HW = str.maketrans(
+    "０１２３４５６７８９ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ"
+    "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ",
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+)
+
 # Line-name bridge between dokorail titles and jr.suki.ing line names.
 # suki naming conventions (from its tmaps data): JR lines carry a lowercase
 # "jr" prefix for some lines (jr奈良線, jr東西線, jr山口線, jr日光線), Toei
@@ -117,8 +123,9 @@ def norm_station(name):
     # unify the small-ke morpheme connector: 霞ヶ関 vs 霞ケ関 across datasets
     name = name.replace("ヶ", "ケ").replace("ｹ", "ケ")
     # cloudrail reports fullwidth digits (空港第２ビル) while suki uses
-    # halfwidth (空港第2ビル(鉄道))
-    return name.translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+    # halfwidth (空港第2ビル(鉄道)); JR-West's train-guide sends fullwidth
+    # ＪＲ station names (ＪＲ三山木) where suki stores JR三山木
+    return name.translate(_FW2HW)
 
 
 def line_names_for(title):

@@ -52,11 +52,16 @@ def _type_compatible(stops_norm, train_type):
     return True
 
 
-def _stops_consistent(stops_n, report_station, official):
+def _stops_consistent(stops_n, report_station, official, max_extra=1):
     """候选 key 的停站序列必须与官方発車順序（departure_info）一致：
     报站之后的候选停站须以官方后续停站为前缀（允许候选继续延伸，如
     さくら 753 官方列表到博多、候选 2456 延伸到鹿児島中央），且官方
-    终点站必须落在候选站序中。站名兼容県后缀（小倉(福岡県) ↔ 小倉）。"""
+    终点站必须落在候选站序中。站名兼容県后缀（小倉(福岡県) ↔ 小倉）。
+
+    max_extra: 候选在官方列表之后还允许延伸几站。默认 1 保持原有严格度；
+    舒适度(comfort)对贯通车传 None —— cloudrail 只发布 JR 段内的后续停站，
+    埼京線→新木場、常磐線各停→小田急 的剩余站在候选里必然超出官方列表，
+    而前缀 + 终点站(dest) 两条硬约束已经锁定同一列车。"""
     off_stations = [s for s in (official.get("stations") or []) if s]
     terminal = official.get("terminal")
     try:
@@ -72,15 +77,16 @@ def _stops_consistent(stops_n, report_station, official):
     n_off = len(off_stations)
     # 站数一致性: 候选报站后的站数必须等于官方后续停站数, 或 +1
     # (官方终点站延伸在列表外, 如 753 官方到川内 + 鹿児島中央终点)
-    if not (n_off <= len(tail) <= n_off + 1):
+    if len(tail) < n_off or (max_extra is not None and len(tail) > n_off + max_extra):
         return False
     for i, off in enumerate(off_stations):
         cand = tail[i]
         if cand != off and not (cand.startswith(off) and cand[len(off):].endswith(("都", "道", "府", "県"))):
             return False
-    if len(tail) == n_off + 1 and terminal and tail[-1] != terminal:
-        # 多出的那一站必须是官方终点站(或带県后缀变体)
-        if not (tail[-1].startswith(terminal) and tail[-1][len(terminal):].endswith(("都", "道", "府", "県"))):
+    if len(tail) > n_off and terminal:
+        # 多出的延伸必须落在官方终点站上(或带県后缀变体)
+        if not (tail[-1].startswith(terminal) and tail[-1][len(terminal):].endswith(("都", "道", "府", "県"))
+                or tail[-1] == terminal):
             return False
     if terminal:
         ok = terminal in stops_n or any(
@@ -157,79 +163,9 @@ def _verify_passage(suki_index, stt, cands, origin_station, dep_hhmm, tol=5):
     return verified, rest
 
 
-def _express_dep_match(stt, suki_index, line_title, report_station, dep_hhmm, tol=4):
-    """特急 dep 决胜（常磐線ひたち/ときわ 修复）。
-
-    数据源(どこトレ)把特急套用在来線普通列车停站模板，站序匹配必然错位
-    （12M 被套仙台→浪江 22 站 → suki 只匹配到普通班次 fuzzy4，宁漏门
-    丢弃；3M 匹配 18 个同模板候选全弃）。用户口径：主站時刻表存的是每站
-    发车分钟，命中任一特急班次即算命中——退回「发车分钟±tol + 线路 +
-    suki i=特 班次」收敛唯一班次。报告站不再作为必要条件：どこトレ 的
-    特急位置/停站同样套用了普通模板（12M 报浜吉田——ひたち不停该站，
-    若强制报告站过滤会把决胜误杀）。同刻多班时报告站才作消歧，仍不唯一
-    返回 []（宁漏不误报）。"""
-    if not stt or not stt.express_keys or not dep_hhmm:
-        return []
-    try:
-        h, m = dep_hhmm.split(":")
-        dep_min = int(h) * 60 + int(m)
-    except (ValueError, AttributeError):
-        return []
-    line_keys = set()
-    if line_title:
-        for ln in suki.line_names_for(line_title):
-            line_keys |= set(suki_index._line_pool.get(ln, []))
-    target = suki.norm_station(report_station) if report_station else None
-    pool = (stt.express_keys & line_keys) if line_keys else stt.express_keys
-
-    def _mk(key, run):
-        stops_n = suki_index._stops_norm.get(str(key)) or []
-        return {
-            "key": str(key),
-            "express": True,
-            "direct": True,
-            "overlap": 1.0,
-            "size": len(stops_n),
-            "dep0": run,
-            "dep_run": f"{run // 60:02d}:{run % 60:02d}",
-        }
-
-    dep_hits = []
-    for key in pool:
-        run = stt.run_near(key, dep_min, tol)
-        if run is not None:
-            dep_hits.append((key, run))
-    if len(dep_hits) == 1:
-        key, run = dep_hits[0]
-        return [_mk(key, run)]
-    if len(dep_hits) > 1 and target:
-        in_stop = []
-        for key, run in dep_hits:
-            stops_n = suki_index._stops_norm.get(str(key))
-            if not stops_n:
-                continue
-            if target in stops_n:
-                in_stop.append((key, run))
-                continue
-            idx = next(
-                (
-                    i
-                    for i, s in enumerate(stops_n)
-                    if s.startswith(target) and s[len(target):].endswith(("都", "道", "府", "県"))
-                ),
-                None,
-            )
-            if idx is not None:
-                in_stop.append((key, run))
-        if len(in_stop) == 1:
-            key, run = in_stop[0]
-            return [_mk(key, run)]
-    return []
-
-
 def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
                             train_type=None, tol=DIRECT_TIME_TOLERANCE_MIN,
-                            official=None, dest=None):
+                            official=None, dest=None, max_extra=1):
     """严格强匹配:把 suki-direct 多候选按『报告站过站时刻 ≈ 表定時刻』
     收敛。三条硬约束(参考在来線 find_leg 的匹配语义,宁漏不误报):
     ① 候选 key 的站序须符合车种特征(_type_compatible)，且当官方発車順序
@@ -263,7 +199,7 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
             continue
         if not _type_compatible(stops_n, train_type):
             continue
-        if official is not None and not _stops_consistent(stops_n, want, official):
+        if official is not None and not _stops_consistent(stops_n, want, official, max_extra):
             continue
         anchor = want if want in stops_n else next(
             s for s in stops_n
@@ -1259,38 +1195,6 @@ def bake(source, data_dir):
                         )
                         if collapsed and len(collapsed) == 1:
                             cands = collapsed
-                # 特急 dep 决胜：どこトレ 把ひたち/ときわ(车号 1-88M)套用在来線
-                # 普通停站模板导致站序匹配错位(12M→fuzzy4、3M→18候选,均被
-                # 宁漏门丢弃)。用户口径：主站時刻表存每站发车分钟,命中任一
-                # 特急班次即算命中。仅对特急车次执行;唯一候选才写。
-                num = str(t.get("odpt:trainNumber") or "").strip()
-                _em = re.match(r"^(\d{1,2})M$", num)
-                if (
-                    _em
-                    and int(_em.group(1)) <= 88
-                    and entry.get("scheduled", {}).get("dep")
-                    and (t.get("_station") or entry.get("from"))
-                ):
-                    expr = _express_dep_match(
-                        stt,
-                        suki_index,
-                        suki_line or line_ja,
-                        t.get("_station") or entry.get("from"),
-                        entry["scheduled"]["dep"],
-                    )
-                    if expr:
-                        _ek = str(expr[0]["key"])
-                        _sn = suki_index._stops_norm.get(_ek)
-                        entry["suki"] = expr
-                        entry["match"] = "express-dep"
-                        entry["scheduled"] = {
-                            "dep": entry["scheduled"]["dep"],
-                            "origin": _sn[0] if _sn else entry["scheduled"].get("origin"),
-                            "destination": _sn[-1] if _sn else entry["scheduled"].get("destination"),
-                            "stops": _sn or entry["scheduled"].get("stops", []),
-                        }
-                        # 决胜成功：站序候选作废（否则下方 cands 覆盖）
-                        cands = None
                 if cands:
                     entry["suki"] = cands
             board.append(entry)
@@ -1332,11 +1236,7 @@ def bake(source, data_dir):
             # between the datasets); suki-direct candidates are trusted only
             # as a unique hit (no sequence evidence behind them)
             if c.get("direct"):
-                if c.get("express"):
-                    # 特急 dep 决胜的唯一候选直接写入（用户口径：命中任一
-                    # 时刻表班次即算命中）
-                    pass
-                elif len(e.get("suki") or []) != 1 or e.get("match") != "suki-direct":
+                if len(e.get("suki") or []) != 1 or e.get("match") != "suki-direct":
                     continue
             else:
                 if not (c["subseq"] or c.get("fuzzy", 99) <= 1):
