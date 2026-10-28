@@ -157,6 +157,76 @@ def _verify_passage(suki_index, stt, cands, origin_station, dep_hhmm, tol=5):
     return verified, rest
 
 
+def _express_dep_match(stt, suki_index, line_title, report_station, dep_hhmm, tol=4):
+    """特急 dep 决胜（常磐線ひたち/ときわ 修复）。
+
+    数据源(どこトレ)把特急套用在来線普通列车停站模板，站序匹配必然错位
+    （12M 被套仙台→浪江 22 站 → suki 只匹配到普通班次 fuzzy4，宁漏门
+    丢弃；3M 匹配 18 个同模板候选全弃）。用户口径：主站時刻表存的是每站
+    发车分钟，命中任一特急班次即算命中——退回「发车分钟±tol + 线路 +
+    suki i=特 班次」收敛唯一班次。报告站不再作为必要条件：どこトレ 的
+    特急位置/停站同样套用了普通模板（12M 报浜吉田——ひたち不停该站，
+    若强制报告站过滤会把决胜误杀）。同刻多班时报告站才作消歧，仍不唯一
+    返回 []（宁漏不误报）。"""
+    if not stt or not stt.express_keys or not dep_hhmm:
+        return []
+    try:
+        h, m = dep_hhmm.split(":")
+        dep_min = int(h) * 60 + int(m)
+    except (ValueError, AttributeError):
+        return []
+    line_keys = set()
+    if line_title:
+        for ln in suki.line_names_for(line_title):
+            line_keys |= set(suki_index._line_pool.get(ln, []))
+    target = suki.norm_station(report_station) if report_station else None
+    pool = (stt.express_keys & line_keys) if line_keys else stt.express_keys
+
+    def _mk(key, run):
+        stops_n = suki_index._stops_norm.get(str(key)) or []
+        return {
+            "key": str(key),
+            "express": True,
+            "direct": True,
+            "overlap": 1.0,
+            "size": len(stops_n),
+            "dep0": run,
+            "dep_run": f"{run // 60:02d}:{run % 60:02d}",
+        }
+
+    dep_hits = []
+    for key in pool:
+        run = stt.run_near(key, dep_min, tol)
+        if run is not None:
+            dep_hits.append((key, run))
+    if len(dep_hits) == 1:
+        key, run = dep_hits[0]
+        return [_mk(key, run)]
+    if len(dep_hits) > 1 and target:
+        in_stop = []
+        for key, run in dep_hits:
+            stops_n = suki_index._stops_norm.get(str(key))
+            if not stops_n:
+                continue
+            if target in stops_n:
+                in_stop.append((key, run))
+                continue
+            idx = next(
+                (
+                    i
+                    for i, s in enumerate(stops_n)
+                    if s.startswith(target) and s[len(target):].endswith(("都", "道", "府", "県"))
+                ),
+                None,
+            )
+            if idx is not None:
+                in_stop.append((key, run))
+        if len(in_stop) == 1:
+            key, run = in_stop[0]
+            return [_mk(key, run)]
+    return []
+
+
 def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
                             train_type=None, tol=DIRECT_TIME_TOLERANCE_MIN,
                             official=None, dest=None):
@@ -1189,6 +1259,38 @@ def bake(source, data_dir):
                         )
                         if collapsed and len(collapsed) == 1:
                             cands = collapsed
+                # 特急 dep 决胜：どこトレ 把ひたち/ときわ(车号 1-88M)套用在来線
+                # 普通停站模板导致站序匹配错位(12M→fuzzy4、3M→18候选,均被
+                # 宁漏门丢弃)。用户口径：主站時刻表存每站发车分钟,命中任一
+                # 特急班次即算命中。仅对特急车次执行;唯一候选才写。
+                num = str(t.get("odpt:trainNumber") or "").strip()
+                _em = re.match(r"^(\d{1,2})M$", num)
+                if (
+                    _em
+                    and int(_em.group(1)) <= 88
+                    and entry.get("scheduled", {}).get("dep")
+                    and (t.get("_station") or entry.get("from"))
+                ):
+                    expr = _express_dep_match(
+                        stt,
+                        suki_index,
+                        suki_line or line_ja,
+                        t.get("_station") or entry.get("from"),
+                        entry["scheduled"]["dep"],
+                    )
+                    if expr:
+                        _ek = str(expr[0]["key"])
+                        _sn = suki_index._stops_norm.get(_ek)
+                        entry["suki"] = expr
+                        entry["match"] = "express-dep"
+                        entry["scheduled"] = {
+                            "dep": entry["scheduled"]["dep"],
+                            "origin": _sn[0] if _sn else entry["scheduled"].get("origin"),
+                            "destination": _sn[-1] if _sn else entry["scheduled"].get("destination"),
+                            "stops": _sn or entry["scheduled"].get("stops", []),
+                        }
+                        # 决胜成功：站序候选作废（否则下方 cands 覆盖）
+                        cands = None
                 if cands:
                     entry["suki"] = cands
             board.append(entry)
@@ -1230,7 +1332,11 @@ def bake(source, data_dir):
             # between the datasets); suki-direct candidates are trusted only
             # as a unique hit (no sequence evidence behind them)
             if c.get("direct"):
-                if len(e.get("suki") or []) != 1 or e.get("match") != "suki-direct":
+                if c.get("express"):
+                    # 特急 dep 决胜的唯一候选直接写入（用户口径：命中任一
+                    # 时刻表班次即算命中）
+                    pass
+                elif len(e.get("suki") or []) != 1 or e.get("match") != "suki-direct":
                     continue
             else:
                 if not (c["subseq"] or c.get("fuzzy", 99) <= 1):
