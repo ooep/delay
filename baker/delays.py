@@ -66,8 +66,14 @@ def _stops_consistent(stops_n, report_station, official, max_extra=1):
     舒适度(comfort)对贯通车传 None —— cloudrail 只发布 JR 段内的后续停站，
     埼京線→新木場、常磐線各停→小田急 的剩余站在候选里必然超出官方列表，
     而前缀 + 终点站(dest) 两条硬约束已经锁定同一列车。"""
-    off_stations = [s for s in (official.get("stations") or []) if s]
-    terminal = official.get("terminal")
+    off_stations = [
+        suki.norm_station(s) for s in (official.get("stations") or []) if s
+    ]
+    # 官方的 station/terminal 可能带括号后缀或行先装饰（富山的行先是
+    # 「南富山駅前（富山駅 経由）」、渥美線 GTFS 带「(渥美線)」），
+    # 候选站序这边已经是 norm_station 过的裸名；不归一化会把整条线的
+    # official 判成不一致，永远钉不上班次。
+    terminal = suki.norm_station(official.get("terminal"))
     try:
         idx = stops_n.index(report_station)
     except ValueError:
@@ -269,6 +275,44 @@ def _align_scheduled(entry, suki_index):
     entry["scheduled"] = sched
 
 
+_SITE_PAREN = re.compile(r"\([^)]*\)")
+
+
+def _site_norm(name):
+    """Mirror the site's normName: ASCII parens only, ケ/ヶ unify, drop 駅."""
+    if not name:
+        return ""
+    n = _SITE_PAREN.sub("", str(name))
+    n = n.replace("ケ", "ヶ")
+    n = re.sub(r"駅$", "", n)
+    return n.strip()
+
+
+def _align_from(entry, suki_index):
+    """Rewrite `from` into the pinned tmap's own spelling when the feed's
+    spelling does not survive the site's exact normName comparison
+    (空港第２ビル vs 空港第2ビル(鉄道), section text 繁藤～新改). The site
+    re-finds the trip by `from` membership, so a spelling-only mismatch
+    silently drops an otherwise correct pin."""
+    fr = entry.get("from")
+    items = entry.get("suki") or []
+    if not fr or not items:
+        return
+    raw = (suki_index.trains.get(str(items[0].get("key"))) or {}).get("s_jas") or []
+    if not raw:
+        return
+    want = _site_norm(fr)
+    if any(_site_norm(s) == want for s in raw):
+        return
+    frags = [fr] + [p.strip() for p in re.split(r"[~～]", fr) if p.strip()]
+    for frag in frags:
+        nf = suki.norm_station(frag)
+        for s in raw:
+            if suki.norm_station(s) == nf:
+                entry["from"] = s
+                return
+
+
 def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
                             train_type=None, tol=DIRECT_TIME_TOLERANCE_MIN,
                             official=None, dest=None, max_extra=1):
@@ -380,6 +424,7 @@ def _resolve_meitetsu_relaxed(stt, suki_index, cands, station, now,
     if official and official.get("departure") is not None:
         est = official["departure"]
     pattern_keys = []
+    loose_keys = []
     for c in cands:
         key = str(c["key"])
         stops_n = suki_index._stops_norm.get(key)
@@ -389,9 +434,20 @@ def _resolve_meitetsu_relaxed(stt, suki_index, cands, station, now,
             continue
         if not _type_compatible(stops_n, train_type):
             continue
+        loose_keys.append((c, key, stops_n))
+        # official 的后续停站是「停车」序列，suki 的 key 是线路通过站
+        # 全序列（急行会多出被通过的站），前缀比对必然失败。这里只是
+        # 优选条件：站序对得上时优先；对不上时仍允许在「终点+种别+
+        # 报告站」唯一确定模式后按官方表定时刻挑运行（上面 ≤3 分钟的
+        # 时间闸门保证不会挑到邻班）。
         if official and not _stops_consistent(stops_n, want, official):
             continue
         pattern_keys.append((c, key, stops_n))
+    if official and not pattern_keys:
+        pattern_keys = loose_keys
+        strict = False
+    else:
+        strict = True
     # require a unique stop-pattern, else stay ambiguous
     uniq = {k for _, k, _ in pattern_keys}
     if len(uniq) != 1:
@@ -402,7 +458,9 @@ def _resolve_meitetsu_relaxed(stt, suki_index, cands, station, now,
         return None
     # closest run within a generous 20-min window; require it to be a clear win
     best = min(pas, key=lambda p: abs(p[0] - est))
-    if abs(best[0] - est) > 20:
+    # 站序一致时沿用宽窗(20 分钟); 只靠「终点+种别+报告站」唯一确定
+    # 模式时必须贴着官方表定时刻, 否则就是按最近班次猜。
+    if abs(best[0] - est) > (20 if strict else 3):
         return None
     dep0 = best[1]
     stops = suki_index.trains[key]["s_jas"]
@@ -1011,7 +1069,6 @@ def bake(source, data_dir):
         ("Mizushima", source.mizushima_feed),
         ("Manyo", source.manyo_feed),
         ("Toyama", source.toyama_feed),
-        ("Tosaden", source.tosaden_feed),
         ("Enoden", source.enoden_feed),
         ("Mizuma", source.mizuma_feed),
         ("HakodateTram", source.hakodate_tram_feed),
@@ -1241,6 +1298,11 @@ def bake(source, data_dir):
                         if direct:
                             break
                     if direct:
+                            # the fragment that produced the candidates is the
+                            # real reported station ("繁藤～新改" sections);
+                            # resolving against the composite text matches no
+                            # stop at all and always returns None
+                            match_station = station
                             entry["suki"] = direct
                             entry["match"] = "suki-direct"
                             # 時刻消歧：无 dokorail 时刻表的线路（新幹線等）
@@ -1268,7 +1330,7 @@ def bake(source, data_dir):
                                         official = None
                                 resolved = resolve_direct_by_time(
                                     stt, suki_index, direct,
-                                    report_station, now, round(delay / 60),
+                                    match_station, now, round(delay / 60),
                                     entry.get("type"), official=official,
                                     dest=t.get("_dest"),
                                 )
@@ -1278,21 +1340,24 @@ def bake(source, data_dir):
                                     # then closest run. Only Meitetsu.
                                     resolved = _resolve_meitetsu_relaxed(
                                         stt, suki_index, direct,
-                                        report_station, now,
+                                        match_station, now,
                                         round(delay / 60),
                                         entry.get("type"), official,
                                         dest=t.get("_dest"))
                                 if resolved:
-                                    rk = str(resolved["cand"]["key"])
-                                    # global uniqueness: a suki train can only be
-                                    # occupied by one live train per bake (loop
-                                    # lines like 山手線 would otherwise map every
-                                    # passing train to the same loop entry)
+                                    # identity is the scheduled run, not the
+                                    # stop pattern: a key holds many runs and
+                                    # two live trains may legitimately sit on
+                                    # different runs of the same pattern
+                                    rk = (str(resolved["cand"]["key"]),
+                                          resolved["cand"].get("dep0"))
                                     if rk in claimed_suki:
                                         continue
                                     claimed_suki[rk] = t.get("number", "?")
                                     entry["suki"] = [resolved["cand"]]
                                     entry["scheduled"] = resolved["scheduled"]
+                                    if match_station != report_station:
+                                        entry["from"] = match_station
                 if leg:
                     stations = [s["station"] for s in leg["stops"]]
                     entry["railway"] = leg["railway"]
@@ -1380,6 +1445,9 @@ def bake(source, data_dir):
     board.sort(key=lambda e: (-e["delay_s"], e["railway"], e["number"] or ""))
     by_key = {}
     for e in board:
+        # 站点按 (key, 发车分钟) 落点,同一班车被多家 feed 各报一条时
+        # (JR-East 的 dokotrain + cloudrail app)两条会钉到同一个班次,
+        # 只让「延误列车」计数虚高。等对齐完成后再按班次去重。
         # 站点只读 suki[0]，必须先把反向/错终点/未验证的候选压到后面或
         # 丢弃；时间并列且证据完全相同的两个 key 无法确定真身→宁漏
         _finalize_candidates(e, stt, suki_index)
@@ -1387,6 +1455,8 @@ def bake(source, data_dir):
         # 按「精确发车分钟 + 始发站」回查到这一班（否则中途起算的车段
         # 会被站点整条丢弃）
         _align_scheduled(e, suki_index)
+        # from 也要能通过站点的精确比对（全角数字/区间文本会被整条丢弃）
+        _align_from(e, suki_index)
         cand_items = e.get("suki") or []
         for c in cand_items:
             # strong matches only for the flat lookup table: exact ordered
@@ -1440,6 +1510,41 @@ def bake(source, data_dir):
                 # surface the worst delay (both directions must stay visible on
                 # the map; the front-end breaks the tie by dep anyway)
                 slot["delay_min"] = max(slot["delay_min"], e["delay_min"])
+
+    def _trip_id(e):
+        """(tmap key, run departure minute) — the identity the site pins on."""
+        items = e.get("suki") or []
+        if len(items) != 1 or items[0].get("key") is None:
+            return None
+        dep = items[0].get("dep0")
+        if dep is None:
+            dep = _hhmm_min((e.get("scheduled") or {}).get("dep"))
+        return None if dep is None else (str(items[0]["key"]), dep)
+
+    def _pin_rank(e):
+        s = e.get("scheduled") or {}
+        return (
+            1 if s.get("dep") and s.get("origin") and e.get("from") else 0,
+            0 if e.get("match") == "suki-direct" else 1,
+            1 if "dep_run" in ((e.get("suki") or [{}])[0]) else 0,
+        )
+
+    kept_trips = {}
+    deduped = []
+    for e in board:
+        tid = _trip_id(e)
+        if tid is None:
+            deduped.append(e)
+            continue
+        hit = kept_trips.get(tid)
+        if hit is None:
+            kept_trips[tid] = (len(deduped), e)
+            deduped.append(e)
+        elif _pin_rank(e) > _pin_rank(hit[1]):
+            # 同一班车,保留证据更硬的一条(站点能钉住 → 站序验证 → 非 direct)
+            deduped[hit[0]] = e
+            kept_trips[tid] = (hit[0], e)
+    board = deduped
     # freshness: for each source, how stale the provider's data was when we
     # fetched it (fetched_at minus the provider's own latest timestamp).
     freshness = {}

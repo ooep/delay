@@ -185,13 +185,19 @@ def fetch(src=None):
             if delay < DELAY_THRESHOLD_SEC or abs(delay) > MATCH_WINDOW_SEC:
                 continue  # on time (or unmatched) -> not output
             seq = sorted(trip_stops.get(trip_id, []))
-            station_names = [sid_name.get(sid, sid) for _, sid, _ in seq]
             trip_hs = trips[trip_id]["headsign"]
-            off = {
-                "departure": seq[0][2] // 60 if seq else None,
-                "stations": station_names,
-                "terminal": trip_hs,
-            }
+            # resolve_direct_by_time 的 official 口径: departure = 报站
+            # 的发车分钟, stations = 报站之后的停站。seq 是全程表, 旧写法
+            # 拿首站时间当 departure、整条表当 stations, 口径对不上, 这条
+            # 线的延误永远钉不上班次。
+            anchor = next((i for i, (_, sid, _) in enumerate(seq) if sid == stop_id), None)
+            off = None
+            if anchor is not None:
+                off = {
+                    "departure": seq[anchor][2] // 60,
+                    "stations": [sid_name.get(sid, sid) for _, sid, _ in seq[anchor + 1:]],
+                    "terminal": trip_hs,
+                }
             direction = ("下り" if any(k in trip_hs for k in
                                       ("三河田原", "運動公園前", "競輪場前", "赤岩口"))
                          else "上り")

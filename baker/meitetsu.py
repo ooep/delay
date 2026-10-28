@@ -214,8 +214,11 @@ def fetch(src=None):
             off = None
             if anchor_dep:
                 hh, mm = anchor_dep.split(":")
+                # resolve_direct_by_time 的 official 口径是「报站之后」的
+                # 停站(不含报站)——rem[0] 就是报站,必须切掉,否则站序
+                # 一致性检查永远对不上,整条线的延误都钉不上班次。
                 off = {"departure": int(hh) * 60 + int(mm),
-                       "stations": [s["name"] for s in rem],
+                       "stations": [s["name"] for s in rem[1:]],
                        "terminal": tr["dest"]}
             body.append({
                 "owl:sameAs": f"Meitetsu:{line}:{anchor}:{tr['dest']}",

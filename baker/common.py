@@ -348,12 +348,6 @@ class Source:
 
         return toyama.fetch(self)
 
-    def tosaden_feed(self):
-        """Tosaden Kotsu IchigoMap CSV positions (baker/tosaden.py)."""
-        from . import tosaden
-
-        return tosaden.fetch(self)
-
     def enoden_feed(self):
         """Enoshima Electric Railway positions (baker/enoden.py)."""
         from . import enoden

@@ -4,7 +4,8 @@
 Reverse-engineered 2026-10-28. The map at
     https://icas.hakodatecitytram.com/location/
 is a Leaflet shell (leaflet.js + prog/prog-108s.js) that polls, every ~9 s,
-the SAME flat CSV-shaped position file family already used by tosaden.py:
+the SAME flat CSV-shaped position file family as the モビナビ高知 bus map
+(which is buses only and therefore not a rail feed):
 
     GET https://icas.hakodatecitytram.com/location/IchigoMap.txt
     GET .../Ichigo_stops.csv            (26-stop master, lat/lng)

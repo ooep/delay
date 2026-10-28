@@ -140,19 +140,32 @@ def fetch_feed(id_name, rosen_group_id, lines, railway_prefix,
             # Scheduled stop sequence for THIS train (rows that actually
             # carry a departure time; short-turn trains have null rows at
             # the line tail).
-            stops = [(s.get("teiryujo_id"), s.get("jikokuhyo_time"))
-                     for s in seq if s.get("jikokuhyo_time")]
-            stop_names = [tei_names.get(tid) or f"#{tid}" for tid, _ in stops]
-            first_dep = _hhm_to_min(stops[0][1]) if stops else None
             terminal = dtl.get("trip_headsign") or veh.get("headsign")
+            # resolve_direct_by_time 的 official 口径: departure = 报站
+            # 的发车分钟, stations = 报站之后的停站。这里 seq 是全程表
+            # (含已过站, 首站时间才是 departure 的旧写法会把表定时刻退
+            # 回到始发站, 站序也永远对不上) —— 以 current 行为锚点切出
+            # 后半程; 没有 current 行(用 passed_teiryujo_name 兜底)时
+            # 宁可不给 official, 也不能给错锚点。
+            cur_i = next((i for i, s in enumerate(seq) if s.get("current")), None)
+            off = None
+            if cur_i is not None:
+                cur_dep = _hhm_to_min(seq[cur_i].get("jikokuhyo_time") or "")
+                if cur_dep is not None:
+                    off = {
+                        "departure": cur_dep,
+                        "stations": [
+                            tei_names.get(s.get("teiryujo_id"))
+                            or f"#{s.get('teiryujo_id')}"
+                            for s in seq[cur_i + 1:]
+                            if s.get("jikokuhyo_time")
+                        ],
+                        "terminal": terminal,
+                    }
             key = (rosen_id, yotei_id)
             if key in seen:
                 continue
             seen.add(key)
-            off = None
-            if stop_names and first_dep is not None:
-                off = {"departure": first_dep, "stations": stop_names,
-                       "terminal": terminal}
             body.append({
                 "owl:sameAs": f"Buscatch:{id_name}:{rosen_id}:{yotei_id}",
                 "odpt:railway": f"{railway_prefix}.{ln['keito_name']}",
