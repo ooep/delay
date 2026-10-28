@@ -79,6 +79,20 @@ def fetch(src=None):
         if delay_sec < DELAY_THRESHOLD_SEC:
             continue
         line_ja = (f[1] or "").strip() or "とさでん交通"
+        # d[11] is a composite position text ("はりまや橋・知寄町二丁目・
+        # 若松町"): split into single-station candidates for the suki-direct
+        # matcher (_station_keys tries each fragment). 北/南はりまや橋
+        # normalize to suki's はりまや橋. d[1] is a 運行系統 code, not a line
+        # name, so the suki pool spans all three tosaden lines.
+        station_raw = (f[11] or "").strip()
+        station_keys = None
+        if station_raw:
+            keys = [
+                ("はりまや橋" if k in ("北はりまや橋", "南はりまや橋") else k)
+                for k in station_raw.replace("～", "・").split("・")
+                if k.strip()
+            ]
+            station_keys = keys or None
         body.append({
             "owl:sameAs": f"Tosaden:{f[5]},{f[6]}:{f[10]}",
             "odpt:railway": "odpt.Railway:Tosaden",
@@ -86,8 +100,10 @@ def fetch(src=None):
             "odpt:delay": delay_sec,
             "odpt:trainType": None,
             "_line_ja": line_ja,
-            "_suki_line": line_ja,
-            "_station": (f[11] or "").strip() or None,
+            "_suki_line": "とさでん交通",
+            "_suki_pools": ["後免線", "伊野線", "桟橋線"],
+            "_station": station_keys[0] if station_keys else None,
+            "_station_keys": station_keys,
             "_dest": (f[10] or "").strip() or None,
             "_direction": None,
         })

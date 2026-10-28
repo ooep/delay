@@ -80,7 +80,23 @@ def fetch(src=None):
             continue
         if delay_sec < DELAY_THRESHOLD_SEC:
             continue
-        line_ja = (f[1] or "").strip() or "函館市電"
+        raw_line = (f[1] or "").strip() or "函館市電"
+        # ICAS line column is a system code (8007/7002/9601/...), not a line
+        # name; suki models the whole tram as one line (函館市電本線), so the
+        # code is normalized away for matching (suki lines_map aliases
+        # 函館市電 -> 函館市電本線).
+        line_ja = "函館市電" if raw_line.isdigit() else raw_line
+        # d[11] is a composite position text ("五稜郭公園前・函館駅前・
+        # 十字街・宝来町"): split into single-station candidates so the
+        # suki-direct matcher can hit any fragment.
+        station_raw = (f[11] or "").strip()
+        station_keys = None
+        if station_raw:
+            keys = [
+                s.strip() for s in station_raw.replace("～", "・").split("・")
+                if s.strip()
+            ]
+            station_keys = keys or None
         body.append({
             "owl:sameAs": f"HakodateTram:{f[5]},{f[6]}:{f[10]}",
             "odpt:railway": "odpt.Railway:HakodateTram",
@@ -89,7 +105,8 @@ def fetch(src=None):
             "odpt:trainType": None,
             "_line_ja": line_ja,
             "_suki_line": line_ja,
-            "_station": (f[11] or "").strip() or None,
+            "_station": station_keys[0] if station_keys else None,
+            "_station_keys": station_keys,
             "_dest": (f[10] or "").strip() or None,
             "_direction": None,
         })
