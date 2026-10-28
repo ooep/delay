@@ -1391,6 +1391,12 @@ def bake(source, data_dir):
                                     match_station, now, round(delay / 60),
                                     entry.get("type"), official=official,
                                     dest=t.get("_dest"),
+                                    # cloudrail 只发布报站后的 1-2 站（1253M
+                                    # 羽鳥→岩間・友部，实际还到勝田 4 站），
+                                    # max_extra=1 会把整列车判成站序不一致；
+                                    # 前缀+终点站+时刻唯一性已能锁定同一列车
+                                    # (comfort 对同一 feed 也传 None)
+                                    max_extra=None if t.get("_official") else 1,
                                 )
                                 if not resolved and op == "Meitetsu":
                                     # Bounded fallback: current station + type +
