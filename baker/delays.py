@@ -294,14 +294,78 @@ def _serves_station(fr, stops_n):
     return any(_fold_norm(s) in want for s in stops_n)
 
 
+_PSEUDO_DEST = ("直通", "方面", "経由", "環状")
+
+
+def _norm_station_label(name):
+    """norm_station with the feed's decorative suffix stripped (好摩行)."""
+    return suki.norm_station(re.sub(r"行$", "", str(name or "").strip()))
+
+
+def _stop_indexes(name, stops_n):
+    """Indexes of a reported station on a candidate's normalized stop list.
+    Accepts the prefecture suffix tmap appends and a terminal that wears a
+    feed-side line prefix (京王線新宿 -> 新宿 at the end of a Keio run)."""
+    want = _norm_station_label(name)
+    if not want or not stops_n:
+        return []
+    out = []
+    for i, s in enumerate(stops_n):
+        if s == want or (
+            s.startswith(want) and s[len(want):].endswith(("都", "道", "府", "県"))
+        ):
+            out.append(i)
+        elif (
+            i in (0, len(stops_n) - 1)
+            and want.endswith(s)
+            and 0 < len(want) - len(s) <= 6
+        ):
+            out.append(i)
+    return out
+
+
+def _from_indexes(fr, stops_n):
+    """All indexes of a reported origin; section text (繁藤～新改) uses its
+    fragments so a section report is not rejected for spelling."""
+    out = []
+    for part in re.split(r"[~～]", str(fr or "")):
+        out.extend(_stop_indexes(part, stops_n))
+    return sorted(set(out))
+
+
+def _run_serves_pair(suki_index, a, b):
+    """True when *some* tmap run visits `a` then `b` in that order. Tells
+    "the destination is modeled as another train" (→ this pin is another
+    train) apart from "the feed's destination lies past tmap's run" (through
+    service boundary, where the pinned run is still the same train)."""
+    if not a or not b:
+        return False
+    cache = suki_index.__dict__.setdefault("_pair_served", {})
+    hit = cache.get((a, b))
+    if hit is None:
+        hit = False
+        for stops in suki_index._stops_norm.values():
+            try:
+                i = stops.index(a)
+            except ValueError:
+                continue
+            if b in stops[i + 1:]:
+                hit = True
+                break
+        cache[(a, b)] = hit
+    return hit
+
+
 def _finalize_candidates(entry, stt, suki_index):
     """Filter and rank entry["suki"] so element 0 is the strongest evidence.
     The site consumes only suki[0]; leaving a reverse-direction or
     wrong-terminal pattern first (same line prefix, e.g. 中野→西船橋 vs
     中野→東葉勝田台) highlights another train. Filters are all hard:
-    station order (subseq/fuzzy<=1), reported terminal, today's passage at
-    the leg origin, then origin dep0 vs scheduled dep. A full tie between two
-    distinct keys stays ambiguous and is dropped (宁漏不误报)."""
+    station order (subseq/fuzzy<=1), reported origin, destination
+    reachability (direction + a tmap run that actually serves from→to),
+    reported terminal, today's passage at the leg origin, then origin dep0
+    vs scheduled dep. A full tie between two distinct keys stays ambiguous
+    and is dropped (宁漏不误报)."""
     items = entry.get("suki") or []
     if not items:
         return
@@ -322,8 +386,31 @@ def _finalize_candidates(entry, stt, suki_index):
                 entry["from"], suki_index._stops_norm.get(str(c.get("key"))) or []
             )
         ]
-    dest = suki.norm_station(entry.get("to")) if entry.get("to") else None
-    if dest:
+    dest = _norm_station_label(entry.get("to")) if entry.get("to") else None
+    if dest and not any(x in str(entry.get("to")) for x in _PSEUDO_DEST):
+        # 站点展示的是「这班车」的晚点;班次的行车方向必须与乘客报告一致。
+        # 反向(终点在起点之前,近鉄 桃園→五十鈴川 曾贴到 五十鈴川→近鉄名古屋)
+        # 一律弃;`to` 不在本班停站表里时,只有 tmap 没有任何 from→to 的班次
+        # 才当作「越出 tmap 建模范围的通直」(西武秩父方向)保留,否则说明
+        # 目的地本有别的班次可走、这里抓错了车(和光市→森林公園 贴到
+        # 川越市→新木場)。宁漏不误报。
+        leg_from = {
+            _norm_station_label(p)
+            for p in re.split(r"[~～]", str(entry.get("from") or ""))
+            if p.strip()
+        }
+        keep = []
+        for c in items:
+            stops_n = suki_index._stops_norm.get(str(c.get("key"))) or []
+            ti = _stop_indexes(dest, stops_n)
+            fi = _from_indexes(entry.get("from"), stops_n)
+            if ti and fi and ti[-1] <= fi[0] and dest not in leg_from:
+                continue
+            if not ti and len(leg_from) == 1:
+                if _run_serves_pair(suki_index, next(iter(leg_from)), dest):
+                    continue
+            keep.append(c)
+        items = keep
         exact = [
             c for c in items
             if _same_station(
