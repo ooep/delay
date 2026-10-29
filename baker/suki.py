@@ -162,6 +162,14 @@ STATION_ALIASES = {
 }
 
 
+def key_order(key):
+    """Sort key for tmap ids: numeric order, string fallback. Candidate pools
+    are built from sets and truncated with `top`; without this tie-break the
+    survivors (and therefore the pinned run) change with PYTHONHASHSEED."""
+    k = str(key)
+    return (0, int(k), "") if k.isdigit() else (1, 0, k)
+
+
 def norm_station(name):
     name = PAREN.sub("", name or "").strip()
     # unify the small-ke morpheme connector: 霞ヶ関 vs 霞ケ関 across datasets
@@ -326,7 +334,8 @@ class SukiIndex:
         has_north_scope = any(line in self.NORTH_TERMINALS for line in want)
         lo, hi = self.TYPE_STOP_BUCKETS.get(train_type or "", (0, 99))
         scored = []
-        for k in {kk for line in want for kk in self._line_pool.get(line, [])}:
+        for k in sorted({kk for line in want for kk in self._line_pool.get(line, [])},
+                        key=key_order):
             hay = self._stops_norm[k]
             if target not in hay and not self._has_pref_suffixed(hay, target):
                 continue
@@ -339,7 +348,7 @@ class SukiIndex:
             scored.append(
                 {"key": k, "direct": True, "overlap": 1.0, "size": len(hay)}
             )
-        scored.sort(key=lambda c: c["size"])
+        scored.sort(key=lambda c: (c["size"], key_order(c["key"])))
         return scored[:top]
 
     def match(self, stops, line_title=None, railway=None, top=3):
@@ -357,7 +366,7 @@ class SukiIndex:
         needle = [norm_station(s) for s in stops]
         needle_set = set(needle)
         scored = []
-        for k in keys:
+        for k in sorted(keys, key=key_order):
             hay = self._stops_norm[k]
             hay_set = set(hay)
             overlap = len(needle_set & hay_set) / max(1, len(needle_set))
@@ -377,6 +386,7 @@ class SukiIndex:
                         fuzzy,
                         -overlap,
                         abs(extra),
+                        key_order(k),
                     ),
                 }
             )

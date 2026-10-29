@@ -129,15 +129,17 @@ def _direct_candidates(suki_index, lines, station, direction, train_type, railwa
     """match_direct over several suki pools, deduped by key (top must cover
     the whole pool: candidates are sorted by stop count, so a 12-stop
     through train would otherwise be pushed out by short patterns)."""
-    merged = []
-    for ln in lines:
+    seen, out, merged = set(), [], []
+    for ln in sorted(lines):
         merged += suki_index.match_direct(
             ln, station, direction, train_type, top=256, railway=railway) or []
-    seen, out = set(), []
     for c in merged:
         if c["key"] not in seen:
             seen.add(c["key"])
             out.append(c)
+    # `lines` is a set: without a total order the payload's suki list (and
+    # resolve's tie-breaks) would change with PYTHONHASHSEED.
+    out.sort(key=lambda c: (c["size"], suki.key_order(c["key"])))
     return out
 
 
@@ -161,7 +163,8 @@ def _match_candidates(suki_index, stations, line, railway, top):
                 continue
             seen.add(k)
             merged.append(c)
-    merged.sort(key=lambda c: (c["fuzzy"], -c["overlap"], abs(c["extra"])))
+    merged.sort(key=lambda c: (c["fuzzy"], -c["overlap"], abs(c["extra"]),
+                              suki.key_order(c["key"])))
     return merged
 
 
