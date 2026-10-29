@@ -40,6 +40,10 @@ DIRECT_TIME_TOLERANCE_MIN = 3
 # 前后班次相距足够远、最近那趟仍然唯一时，才允许超出上面的 ±3 分钟窗。
 SINGLETON_STALE_TOLERANCE_MIN = 6
 SINGLETON_RUN_SEPARATION_MIN = 8
+# feed 自带班次号的线路(函館市電 ICAS: "系统_發車HHMM_…")：用班次号中段
+# 的表定始发分钟钉车，再用车辆当前站该班次的表定通过时刻与 now-delay
+# 做一致性闸门。偏差超限说明班次号/时刻表已漂移，宁可不钉。
+TRIP_ID_TIME_TOLERANCE_MIN = 6
 
 
 def _type_compatible(stops_norm, train_type):
@@ -762,6 +766,56 @@ def _resolve_direct_pool(stt, suki_index, cands, station, now, delay_min,
         "stops": stops,
     }
     return {"cand": c2, "scheduled": scheduled}
+
+
+def _resolve_by_trip_dep0(stt, suki_index, cands, dep0, dest, now, delay_min,
+                          cur_station=None):
+    """用 feed 自报班次号里的表定始发分钟直接钉车(函館市電 ICAS 第19列)。
+
+    这条路比按报站时刻猜强得多：班次号是车辆自己声明的身份，只要
+    「同一发车分钟 + 同一终点站」在当日时刻表里唯一，就是这趟车。
+    时刻表自身也保证唯一：函館市電 同终点的 key 之间没有任何共享 dep0。
+
+    再用车辆当前站(d[16])本轮的表定通过时刻 vs now-delay 做闸门——
+    班次号过期、时刻表漂移或车辆不在自己线路上时宁可不解(宁漏不误报)。
+    """
+    if not stt or dep0 is None:
+        return None
+    want_dest = suki.norm_station(dest) if dest else None
+    if not want_dest:
+        return None
+    hits = []
+    for c in cands:
+        key = str(c["key"])
+        stops_n = suki_index._stops_norm.get(key) or []
+        if not stops_n or stops_n[-1] != want_dest:
+            continue
+        if dep0 in (stt.runs.get(key) or []):
+            hits.append((key, c, stops_n))
+    if len(hits) != 1:
+        return None
+    key, cand, stops_n = hits[0]
+    cur = suki.norm_station(cur_station) if cur_station else None
+    if cur:
+        if cur not in stops_n:
+            return None
+        est = now.hour * 60 + now.minute - (delay_min or 0)
+        this_run = [p for p in (stt.passage_times(key, stops_n, cur) or [])
+                    if p[1] == dep0]
+        if not this_run:
+            return None
+        if min(abs(a - est) for a, _ in this_run) > TRIP_ID_TIME_TOLERANCE_MIN:
+            return None
+    c2 = dict(cand)
+    c2["size"] = len(stops_n)
+    c2["dep0"] = dep0
+    c2["gap"] = 0
+    stops = suki_index.trains[key]["s_jas"]
+    return {"cand": c2, "scheduled": {
+        "dep": f"{dep0 // 60:02d}:{dep0 % 60:02d}",
+        "origin": stops[0],
+        "stops": stops,
+    }}
 
 
 def _resolve_meitetsu_relaxed(stt, suki_index, cands, station, now,
@@ -1698,7 +1752,17 @@ def bake(source, data_dir):
                             # 单候选也必须解一次: 主站需要 scheduled.dep 才能
                             # 按分钟回查班次,而 suki-direct 路径的 dep 只能由
                             # 表定时刻给出(len(direct)==1 时也不例外)。
-                            if stt:
+                            # feed 自报班次号(函館市電)时先走精确钉车。
+                            resolved = None
+                            if stt and t.get("_trip_dep0") is not None:
+                                resolved = _resolve_by_trip_dep0(
+                                    stt, suki_index, direct, t["_trip_dep0"],
+                                    _feed_dest(op, t) or t.get("_odpt_dest"),
+                                    now, round(delay / 60),
+                                    cur_station=t.get("_cur_station"),
+                                )
+                            widened = False
+                            if not resolved and stt:
                                 # feeds may ship their own official timetable
                                 # (jreast_app: cloudrail planArrival + remaining
                                 # stops; only used when the feed is sure of it)

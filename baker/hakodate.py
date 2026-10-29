@@ -20,14 +20,22 @@ Vehicle row layout (verified against production client prog-108s.js):
                                  (official UI: "谷地頭 +5" = 5 min late)
     d[13]  passenger count / crowding
 
-We emit only rows with d[12] >= 60 (>= 1 minute late). No train number /
-train type / per-train timetable is exposed by this endpoint, so those
-fields stay None (宁漏不误报). Probe-time note: IchigoMap.txt returned
-only the "BOM END_F" terminator at 01:1x JST (service ended for the
-night), so no live vehicle row was captured; the parser is defensive
-about short rows and is byte-identical in shape to the production client.
+We emit only rows with d[12] >= 60 (>= 1 minute late). d[19] carries the
+vehicle's own trip id ("01_1745_2-1-3"): the middle field is the
+SCHEDULED origin departure (HHMM) of the run it is working. Verified
+live 2026-10-29 17:52 JST on 12 in-service vehicles - each one's
+scheduled passage at its current stop (d[16]) sat within 0-2 min of
+(d[3] - delay) for exactly that dep0, and no two keys sharing a
+terminal share a dep0, so (terminal, dep0) pins the run uniquely.
+d[19] runs with no destination (out of service / depot) stay unpinned.
+d[16] is the stop the vehicle is at/just left; d[11] is the upcoming
+stops ("十字街・函館駅前・..."), which is what `from` reports.
+The file is a ~1 minute rolling log (each vehicle appears every ~3 s),
+so only the newest row per vehicle is emitted - otherwise one late tram
+becomes 15 identical payload rows.
 """
 
+import re
 import urllib.request
 
 from . import common
@@ -67,7 +75,7 @@ def fetch(src=None):
         now = common.jst_now()
         raw = _get(f"{URL}?{now.hour:02d}{now.minute:02d}{now.second:02d}",
                    REFERER)
-    body = []
+    body = {}
     for line in raw.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         line = line.strip()
         if not line or line == "END_F" or "END_F" in line:
@@ -81,6 +89,7 @@ def fetch(src=None):
             continue
         if delay_sec < DELAY_THRESHOLD_SEC:
             continue
+        veh = (f[0] or "").lstrip("\ufeff").strip()
         raw_line = (f[1] or "").strip() or "函館市電"
         # ICAS line column is a system code (8007/7002/9601/...), not a line
         # name; suki models the whole tram as one line (函館市電本線), so the
@@ -98,7 +107,17 @@ def fetch(src=None):
                 if s.strip()
             ]
             station_keys = keys or None
-        body.append({
+        cur_station = (f[16] or "").strip() if len(f) > 16 else ""
+        if not station_keys and cur_station:
+            # 无行先预告时退回车辆当前所在站:它同样在本班停站序列里,
+            # 且班次号+d[16] 的时刻闸门会再校验一遍。
+            station_keys = [cur_station]
+        trip_dep0 = None
+        if len(f) > 19:
+            m = re.match(r"^\d+_(\d{2})(\d{2})_", (f[19] or "").strip())
+            if m and int(m.group(1)) < 24 and int(m.group(2)) < 60:
+                trip_dep0 = int(m.group(1)) * 60 + int(m.group(2))
+        row = {
             "owl:sameAs": f"HakodateTram:{f[5]},{f[6]}:{f[10]}",
             "odpt:railway": "odpt.Railway:HakodateTram",
             "odpt:trainNumber": None,
@@ -108,12 +127,16 @@ def fetch(src=None):
             "_suki_line": line_ja,
             "_station": station_keys[0] if station_keys else None,
             "_station_keys": station_keys,
+            "_cur_station": cur_station or None,
+            "_trip_dep0": trip_dep0,
             "_dest": (f[10] or "").strip() or None,
             "_direction": None,
-        })
+        }
+        # rolling log: latest sample per vehicle wins
+        body[veh or f"_{len(body)}"] = row
     return {
         "ok": True,
         "fetchedAt": common.jst_now().isoformat(),
-        "body": body,
+        "body": list(body.values()),
         "source": "icas.hakodatecitytram.com",
     }
