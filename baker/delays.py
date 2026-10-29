@@ -339,15 +339,26 @@ def _pin_by_endpoints(entry, suki_index, stt):
     runs that serve the reported from→to in order and whose passage at the
     leg origin matches scheduled.dep. Exactly one (key, dep0) hit wins;
     anything less stays unpinned (宁漏不误报). Only runs for empty suki --
-    a stop-pattern pin always outranks an endpoint-only one."""
+    a stop-pattern pin always outranks an endpoint-only one. A missing `to`
+    is filled from the leg's own terminus, which then demands an exact
+    departure match (no slack)."""
     if not stt:
         return
     to = entry.get("to")
     fr = entry.get("from")
     sched = entry.get("scheduled") or {}
-    if not fr or not to or any(x in str(to) for x in _PSEUDO_DEST):
+    if not fr:
         return
-    dest = _norm_station_label(to)
+    if not to or any(x in str(to) for x in _PSEUDO_DEST):
+        # 终点缺失时用腿自己的终点当终点，但此时起点时刻必须整点吻合
+        stops = sched.get("stops") or []
+        if len(stops) < 2:
+            return
+        dest = _norm_station_label(stops[-1])
+        tol = 0
+    else:
+        dest = _norm_station_label(to)
+        tol = 5
     origin = _norm_station_label(sched.get("origin"))
     dep_min = _hhmm_min(sched.get("dep"))
     if not dest or not origin or dep_min is None or dest == _norm_station_label(fr):
@@ -361,7 +372,7 @@ def _pin_by_endpoints(entry, suki_index, stt):
         fi = _from_indexes(fr, stops_n)
         if not fi:
             continue
-        ti = _stop_indexes(to, stops_n)
+        ti = _stop_indexes(dest, stops_n)
         if not ti or ti[-1] <= fi[0]:
             continue
         times = stt.stop_times(key, stops_n, stops_n[oi[0]])
@@ -370,7 +381,7 @@ def _pin_by_endpoints(entry, suki_index, stt):
         gap, arr, _dep, dep0 = min(
             (abs(d - dep_min), a, d, d0) for a, d, d0 in times
         )
-        if gap <= 5:
+        if gap <= tol:
             hits.setdefault((str(key), dep0), (gap, str(key), arr, dep0, stops_n))
     if len(hits) != 1:
         return
