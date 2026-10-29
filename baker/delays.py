@@ -333,6 +333,64 @@ def _from_indexes(fr, stops_n):
     return sorted(set(out))
 
 
+def _pin_by_endpoints(entry, suki_index, stt):
+    """Last-resort pin for rows whose leg stops describe another segment or
+    the reverse direction (あずさ 甲府→松本 carrying a 甲府→高尾 leg): keep
+    runs that serve the reported from→to in order and whose passage at the
+    leg origin matches scheduled.dep. Exactly one (key, dep0) hit wins;
+    anything less stays unpinned (宁漏不误报). Only runs for empty suki --
+    a stop-pattern pin always outranks an endpoint-only one."""
+    if not stt:
+        return
+    to = entry.get("to")
+    fr = entry.get("from")
+    sched = entry.get("scheduled") or {}
+    if not fr or not to or any(x in str(to) for x in _PSEUDO_DEST):
+        return
+    dest = _norm_station_label(to)
+    origin = _norm_station_label(sched.get("origin"))
+    dep_min = _hhmm_min(sched.get("dep"))
+    if not dest or not origin or dep_min is None or dest == _norm_station_label(fr):
+        return
+    hits = {}
+    for key in suki_index._stops_norm:
+        stops_n = suki_index._stops_norm[key]
+        oi = _stop_indexes(origin, stops_n)
+        if not oi:
+            continue
+        fi = _from_indexes(fr, stops_n)
+        if not fi:
+            continue
+        ti = _stop_indexes(to, stops_n)
+        if not ti or ti[-1] <= fi[0]:
+            continue
+        times = stt.stop_times(key, stops_n, stops_n[oi[0]])
+        if not times:
+            continue
+        gap, arr, _dep, dep0 = min(
+            (abs(d - dep_min), a, d, d0) for a, d, d0 in times
+        )
+        if gap <= 5:
+            hits.setdefault((str(key), dep0), (gap, str(key), arr, dep0, stops_n))
+    if len(hits) != 1:
+        return
+    gap, key, arr, dep0, stops_n = next(iter(hits.values()))
+    entry["suki"] = [
+        {
+            "key": key,
+            "subseq": True,
+            "fuzzy": 0,
+            "overlap": 1.0,
+            "extra": len(stops_n) - 2,
+            "size": len(stops_n),
+            "dep_run": f"{arr // 60:02d}:{arr % 60:02d}",
+            "dep0": dep0,
+            "gap": gap,
+            "endpoint": True,
+        }
+    ]
+
+
 def _run_serves_pair(suki_index, a, b):
     """True when *some* tmap run visits `a` then `b` in that order. Tells
     "the destination is modeled as another train" (→ this pin is another
@@ -1793,6 +1851,8 @@ def bake(source, data_dir):
         # 站点只读 suki[0]，必须先把反向/错终点/未验证的候选压到后面或
         # 丢弃；时间并列且证据完全相同的两个 key 无法确定真身→宁漏
         _finalize_candidates(e, stt, suki_index)
+        if not (e.get("suki") or []):
+            _pin_by_endpoints(e, suki_index, stt)
         # scheduled.dep/origin 改成所钉 tmap 班次自己的口径，站点才能
         # 按「精确发车分钟 + 始发站」回查到这一班（否则中途起算的车段
         # 会被站点整条丢弃）
