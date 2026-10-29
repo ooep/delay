@@ -1409,7 +1409,7 @@ def bake(source, data_dir):
                 )
                 match_method = "number" if leg else None
                 pos_gap = None
-                if not leg and t.get("_station"):
+                if not leg and t.get("_station") and not t.get("_skip_position_leg"):
                     # position-time fallback: the train reports where it is
                     # and how late - find the timetable leg that fits
                     leg, pos_gap = store.find_leg_by_position(

@@ -15,6 +15,9 @@ The shinkansen page (ti08) builds its data URLs at runtime from a template
 with 編成 file names - needs a browser session; deferred.
 """
 
+import json
+import re
+
 from . import common
 
 BASE = "https://traininfo.jr-central.co.jp"
@@ -41,6 +44,15 @@ SHINKANSEN_COMMON_URL = BASE + "/shinkansen/common/data/common_ja.json"
 # 発車順序案内（官方表定時刻 + 停站序列）: departure_info_{station}_{bound}.json
 # bound: 1=上り(博多→東京) 2=下り(東京→博多)
 SHINKANSEN_DEP_URL = BASE + "/shinkansen/var/train_info/departure_info_{}_{}.json"
+
+# 在来線 position grid. train_info 只给 (locationRow, locationCol, position):
+# locationRow 是 status_detail.html 里该线站表的 1-based 序号（站点表按
+# kudariJun 升序），locationCol 1=上り/2=下り，position 0=在站/1=站间。
+# 没有这两张 master，整份 feed 就没有任何站名，永远无法匹配。
+ZAISEN_LINE_MASTER_URL = BASE + "/zairaisen/data/hp_senku_master_ja.json"
+ZAISEN_STATION_MASTER_URL = BASE + "/zairaisen/data/hp_eki_master_ja.json"
+
+_ZAISEN_GRID = []  # 进程内缓存: [(lookup, by_name, station_order)]
 
 # module-level cache of common_ja constant (station/train maps), filled by
 # fetch_shinkansen; used by fetch_shinkansen_departure to name stations
@@ -86,6 +98,79 @@ def _offline_json(src, name):
         return src.offline_json(name)
     except Exception:
         return None
+
+
+def _zaisen_grid(src):
+    """(lookup, by_name, station_order) from the two zairaisen masters.
+
+    lookup: (line name, section text) -> line code (東海道線 appears twice,
+    split 熱海～豊橋 / 豊橋～米原, each with its own station list);
+    by_name: line name -> [line codes] for section-less feeds;
+    station_order: line code -> station names in kudariJun order, i.e.
+    locationRow - 1. Failure returns empty maps (rows keep no station)."""
+    if _ZAISEN_GRID:
+        return _ZAISEN_GRID[0]
+    if src.offline:
+        senku = _offline_json(src, "jc-senku-master-ja.json")
+        eki = _offline_json(src, "jc-eki-master-ja.json")
+    else:
+        try:
+            senku = common.get_json(ZAISEN_LINE_MASTER_URL)
+            eki = common.get_json(ZAISEN_STATION_MASTER_URL, retries=2)
+        except Exception as exc:
+            print(f"jrcentral masters: {type(exc).__name__}: {str(exc)[:120]}")
+            senku = eki = None
+    if not isinstance(senku, dict) or not isinstance(eki, dict):
+        return ({}, {}, {})
+    by_line = {}
+    for e in eki.get("lst") or []:
+        code = str((e or {}).get("ryokakuSenkuCd") or "")
+        if code:
+            by_line.setdefault(code, []).append(e)
+
+    def _jun(e):
+        try:
+            return int(str(e.get("kudariJun") or "0"))
+        except ValueError:
+            return 0
+
+    station_order = {
+        code: [e.get("ekiMei") for e in sorted(entries, key=_jun)]
+        for code, entries in by_line.items()
+    }
+    lookup, by_name = {}, {}
+    for s in senku.get("lst") or []:
+        code = str((s or {}).get("ryokakuSenkuCd") or "")
+        name = (s or {}).get("ryokakuSenkuMei") or ""
+        if not code or not name:
+            continue
+        lookup[(name, (s or {}).get("ryokakuSenkuKaishiShuryoEki") or "")] = code
+        by_name.setdefault(name, []).append(code)
+    grid = (lookup, by_name, station_order)
+    _ZAISEN_GRID.append(grid)
+    return grid
+
+
+def _zaisen_station(grid, line_name, row):
+    lookup, by_name, station_order = grid
+    name, section = line_name, ""
+    m = re.match(r"^(.*?)[(（](.*)[)）]\s*$", line_name)
+    if m:
+        name, section = m.group(1), m.group(2)
+    code = lookup.get((name, section))
+    if not code:
+        codes = by_name.get(name) or []
+        if len(codes) != 1:
+            return None  # 東海道線 without its section is two different grids
+        code = codes[0]
+    stations = station_order.get(code) or []
+    try:
+        idx = int(str(row))
+    except ValueError:
+        return None
+    if 1 <= idx <= len(stations):
+        return stations[idx - 1]
+    return None
 
 
 def fetch_shinkansen(src):
@@ -193,6 +278,7 @@ def _fetch_zairaisen(src):
         return None
 
     body = []
+    grid = None
     for t in trains:
         if not isinstance(t, dict):
             continue
@@ -200,10 +286,17 @@ def _fetch_zairaisen(src):
         delay_min = int(str(t.get("delay_lin") or "0").strip() or 0)
         if not number or delay_min < DELAY_THRESHOLD_MIN:
             continue
-        line_name = _multi_lang(t.get("linename"))
+        raw_name = _multi_lang(t.get("linename"))
         # feed names carry section suffixes: 東海道線(熱海～豊橋) -> 東海道線
-        line_name = common.PAREN_RE.sub("", line_name).strip()
+        line_name = common.PAREN_RE.sub("", raw_name).strip()
         line_name = LINE_NAME_REWRITES.get(line_name, line_name)
+        station = None
+        if str(t.get("position") or "") == "0":
+            # 在站才有表定過站的时刻锚点；站间(position=1)只知道下一站，
+            # 到站表定时刻比 now-delay 晚 1-5 分钟不定，宁漏不误报
+            if grid is None:
+                grid = _zaisen_grid(src)
+            station = _zaisen_station(grid, raw_name, t.get("locationRow"))
         body.append(
             {
                 "owl:sameAs": f"JR-Central:{number}.{t.get('train_identification_key', '')}",
@@ -213,7 +306,12 @@ def _fetch_zairaisen(src):
                 "odpt:trainType": _multi_lang(t.get("traintype")) or None,
                 "_line_ja": line_name,
                 "_suki_line": line_name,
-                "_station": None,
+                "_station": station,
+                "_dest": _multi_lang(t.get("tostation")) or None,
+                # 站名来自站表序号、只有 now-delay 一个时刻锚点：dokorail
+                # 车段按站+时刻兜底(tol=20)对通勤线太松，交给 suki-direct
+                # 的 ±3 唯一性收敛
+                "_skip_position_leg": bool(station),
                 "_nickname": _multi_lang(t.get("nickname")) or None,
             }
         )
@@ -225,5 +323,3 @@ def _fetch_zairaisen(src):
         "source": "traininfo.jr-central.co.jp",
     }
 
-
-import json  # noqa: E402
