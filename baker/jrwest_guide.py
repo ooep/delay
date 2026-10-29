@@ -108,14 +108,18 @@ def fetch(src=None):
                 pending.append((slug, number, delay_min, t))
                 delayed_slugs.add(slug)
 
-    # station names only for lines that actually have delayed trains
+    # station names only for lines that actually have delayed trains.
+    # Codes are scoped to the line file (0391 is 篠原 on one line and 和田山
+    # on another; 54 such collisions in one sweep), so key by (slug, code) -
+    # a global code map both flips with set iteration order and renames
+    # trains to another line's station.
     station_names = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
-        for slug, st in ex.map(lambda s: (s, _get(src, f"{s}_st.json", f"wg-st-{s}.json")), list(delayed_slugs)):
+        for slug, st in ex.map(lambda s: (s, _get(src, f"{s}_st.json", f"wg-st-{s}.json")), sorted(delayed_slugs)):
             for row in (st or {}).get("stations") or []:
                 info = row.get("info") or {}
                 if info.get("code"):
-                    station_names[info["code"]] = info.get("name")
+                    station_names[(slug, info["code"])] = info.get("name")
 
     def _dest_text(raw):
         # dest is normally {text, code, line} but the live API sometimes
@@ -143,7 +147,7 @@ def fetch(src=None):
                 "_number_digits": re.sub(r"\D", "", number) or None,
                 "_line_ja": line_name,
                 "_suki_line": line_name,
-                "_station": station_names.get(at),
+                "_station": station_names.get((slug, at)),
                 "_dest": _dest_text(t.get("dest")),
             }
         )
