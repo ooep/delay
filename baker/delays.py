@@ -125,6 +125,25 @@ def _hhmm_min(hhmm):
         return None
 
 
+# 近鉄 live feed 用短站名(奈良/難波/名古屋/上本町), tmaps 用带社名前缀的
+# 站名。不别名则 `_finalize_candidates` 的终点收窄永远落空, 同方向所有
+# 停站模式按站数打平、整行被弃。只对 Kintetsu 生效: JR 奈良/名古屋 是
+# 同名异站, 全局别名会把两家钉串。
+KINTETSU_DEST_ALIASES = {
+    "奈良": "近鉄奈良",
+    "名古屋": "近鉄名古屋",
+    "難波": "大阪難波",
+    "上本町": "大阪上本町",
+}
+
+
+def _feed_dest(op, t):
+    dest = t.get("_dest")
+    if dest and op == "Kintetsu":
+        return KINTETSU_DEST_ALIASES.get(dest, dest)
+    return dest
+
+
 def _direct_candidates(suki_index, lines, station, direction, train_type, railway):
     """match_direct over several suki pools, deduped by key (top must cover
     the whole pool: candidates are sorted by stop count, so a 12-stop
@@ -470,6 +489,13 @@ def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
                 continue
             pas = stt.passage_times(key, stops_n, anchor)
             near = [p for p in pas if abs(p[0] - est) <= tol] if pas else []
+            if len(near) > 1:
+                # peak headways (大江戸線 3 min) put two runs of one pattern
+                # inside ±3. An exact scheduled-minute hit is still decisive
+                # when the next run is >=3 min away; an inexact hit is not.
+                near.sort(key=lambda p: abs(p[0] - est))
+                if near[0][0] == est and near[1][0] - near[0][0] >= tol:
+                    near = near[:1]
             if len(near) != 1:
                 continue
             arrive, dep0 = near[0]
@@ -1315,7 +1341,7 @@ def bake(source, data_dir):
             if t.get("_nickname"):
                 entry["name"] = t["_nickname"]
             if t.get("_dest"):
-                entry["to"] = t["_dest"]
+                entry["to"] = _feed_dest(op, t)
             elif not entry.get("to"):
                 # ODPT lines carry the service terminal as a station id
                 # (Toei/Tobu). Through-runs to another operator's line name a
@@ -1481,7 +1507,7 @@ def bake(source, data_dir):
                                     stt, suki_index, direct,
                                     match_station, now, round(delay / 60),
                                     entry.get("type"), official=official,
-                                    dest=t.get("_dest") or t.get("_odpt_dest"),
+                                    dest=_feed_dest(op, t) or t.get("_odpt_dest"),
                                     # cloudrail 只发布报站后的 1-2 站（1253M
                                     # 羽鳥→岩間・友部，实际还到勝田 4 站），
                                     # max_extra=1 会把整列车判成站序不一致；
@@ -1498,7 +1524,7 @@ def bake(source, data_dir):
                                         match_station, now,
                                         round(delay / 60),
                                         entry.get("type"), official,
-                                        dest=t.get("_dest"))
+                                        dest=_feed_dest(op, t))
                                 if resolved:
                                     # identity is the scheduled run, not the
                                     # stop pattern: a key holds many runs and
