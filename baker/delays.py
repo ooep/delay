@@ -235,18 +235,18 @@ def _same_station(a, b):
 
 
 def _serves_station(fr, stops_n):
-    """True when the site's exact normName lookup of `from` finds it in the
-    candidate's stop list. Section text (繁藤～新改) passes through its
-    fragments - _align_from rewrites those to a single station before the
-    payload ships."""
+    """True when the candidate's stop list serves the reported `from`.
+    Spelling is compared with the NFKC fold because _align_from writes the
+    tmap spelling back into `from` afterwards; section text (繁藤～新改)
+    passes through its fragments."""
     if not stops_n:
         return False
-    want = {_site_norm(fr)}
+    want = {_fold_norm(fr)}
     want.update(
-        _site_norm(p.strip()) for p in re.split(r"[~～]", str(fr)) if p.strip()
+        _fold_norm(p.strip()) for p in re.split(r"[~～]", str(fr)) if p.strip()
     )
     want.discard("")
-    return any(_site_norm(s) in want for s in stops_n)
+    return any(_fold_norm(s) in want for s in stops_n)
 
 
 def _finalize_candidates(entry, stt, suki_index):
@@ -351,27 +351,34 @@ _SITE_PAREN = re.compile(r"\([^)]*\)")
 
 
 def _site_norm(name):
-    """Mirror the site's normName: ASCII parens only, ケ/ヶ unify, drop 駅.
-
-    NFKC folds the CJK compatibility ideographs that feeds and tmap spell
-    differently (京王's 笹塚 U+FA10 vs 笹塚 U+585A) - the site's own normName
-    does not, so the fold has to happen on our side before we hand `from`
-    over: _align_from then writes the tmap spelling back and the site's
-    exact lookup succeeds."""
+    """Exact mirror of the site's normName: ASCII parens only, ケ/ヶ unify,
+    drop 駅. This is the yardstick for "will the site match?", so it must not
+    fold anything the site does not fold."""
     if not name:
         return ""
-    n = unicodedata.normalize("NFKC", _SITE_PAREN.sub("", str(name)))
+    n = _SITE_PAREN.sub("", str(name))
     n = n.replace("ケ", "ヶ")
     n = re.sub(r"駅$", "", n)
     return n.strip()
 
 
+def _fold_norm(name):
+    """_site_norm plus NFKC: feeds and tmap spell compatibility ideographs
+    and full-width digits differently (京王 笹塚 U+FA10 vs 笹塚 U+585A,
+    空港第２ビル vs 空港第2ビル(鉄道)). Used only to FIND the tmap spelling -
+    the site compares exactly, so _align_from must write that spelling back
+    before the payload ships."""
+    if not name:
+        return ""
+    return _site_norm(unicodedata.normalize("NFKC", str(name)))
+
+
 def _align_from(entry, suki_index):
     """Rewrite `from` into the pinned tmap's own spelling when the feed's
     spelling does not survive the site's exact normName comparison
-    (空港第２ビル vs 空港第2ビル(鉄道), section text 繁藤～新改). The site
-    re-finds the trip by `from` membership, so a spelling-only mismatch
-    silently drops an otherwise correct pin."""
+    (空港第２ビル vs 空港第2ビル(鉄道), 笹塚 vs 笹塚, section text 繁藤～新改).
+    The site re-finds the trip by `from` membership, so a spelling-only
+    mismatch silently drops an otherwise correct pin."""
     fr = entry.get("from")
     items = entry.get("suki") or []
     if not fr or not items:
@@ -379,14 +386,20 @@ def _align_from(entry, suki_index):
     raw = (suki_index.trains.get(str(items[0].get("key"))) or {}).get("s_jas") or []
     if not raw:
         return
-    want = _site_norm(fr)
-    if any(_site_norm(s) == want for s in raw):
+    want = _fold_norm(fr)
+    hit = next((s for s in raw if _fold_norm(s) == want), None)
+    if hit is not None:
+        if _site_norm(hit) != _site_norm(fr):
+            entry["from"] = hit
         return
     frags = [fr] + [p.strip() for p in re.split(r"[~～]", fr) if p.strip()]
     for frag in frags:
-        nf = suki.norm_station(frag)
+        nf = _fold_norm(frag)
+        if not nf:
+            continue
+        nfs = suki.norm_station(frag)
         for s in raw:
-            if suki.norm_station(s) == nf:
+            if _fold_norm(s) == nf or suki.norm_station(s) == nfs:
                 entry["from"] = s
                 return
 
