@@ -117,6 +117,10 @@ def fetch(src=None):
                     "_line_ja": t.get("lineName") or line_ja,
                     "_suki_line": line_ja,
                     "_station": t.get("fromStationName"),
+                    # 始发站: 西武 app 明确给出本列车从哪一站开出。suki 里
+                    # 同一条线有大量只差始发站的短交路 key(豊島園/石神井公園/
+                    # 小手指…),仅靠过站分钟会把延误贴到别的列车上。
+                    "_start": t.get("startStationName"),
                     "_dest": t.get("endStationName"),
                     "_direction": t.get("direction"),
                     "_number_prefix": number,

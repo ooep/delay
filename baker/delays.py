@@ -451,7 +451,36 @@ def _align_from(entry, suki_index):
 
 def resolve_direct_by_time(stt, suki_index, cands, station, now, delay_min,
                             train_type=None, tol=DIRECT_TIME_TOLERANCE_MIN,
-                            official=None, dest=None, max_extra=1):
+                            official=None, dest=None, max_extra=1, origin=None):
+    """`_resolve_direct_pool` with an optional hard origin hint.
+
+    `origin` is only passed by feeds that report the train's own first station
+    (西武 startStationName). suki carries many short-turn keys that differ
+    only in where they start (豊島園/石神井公園/小手指→池袋), and passage
+    minutes alone cannot tell them apart - the same clock time lands on two
+    different services. When the pool holds any origin-matching candidate the
+    gate is hard: resolving against an origin-mismatched key would pin the
+    delay to another train. Only when nothing in the pool starts there (a
+    mid-route 運転区間 change, or a key that models a longer through run) does
+    the whole pool stay in play."""
+    if origin:
+        want_origin = suki.norm_station(origin)
+        gated = [
+            c for c in cands
+            if (suki_index._stops_norm.get(str(c["key"])) or [None])[0] == want_origin
+        ]
+        if gated and len(gated) < len(cands):
+            return _resolve_direct_pool(
+                stt, suki_index, gated, station, now, delay_min,
+                train_type, tol, official, dest, max_extra)
+    return _resolve_direct_pool(
+        stt, suki_index, cands, station, now, delay_min,
+        train_type, tol, official, dest, max_extra)
+
+
+def _resolve_direct_pool(stt, suki_index, cands, station, now, delay_min,
+                         train_type=None, tol=DIRECT_TIME_TOLERANCE_MIN,
+                         official=None, dest=None, max_extra=1):
     """严格强匹配:把 suki-direct 多候选按『报告站过站时刻 ≈ 表定時刻』
     收敛。三条硬约束(参考在来線 find_leg 的匹配语义,宁漏不误报):
     ① 候选 key 的站序须符合车种特征(_type_compatible)，且当官方発車順序
@@ -1537,6 +1566,7 @@ def bake(source, data_dir):
                                     # 前缀+终点站+时刻唯一性已能锁定同一列车
                                     # (comfort 对同一 feed 也传 None)
                                     max_extra=None if t.get("_official") else 1,
+                                    origin=t.get("_start"),
                                 )
                                 if not resolved and op == "Meitetsu":
                                     # Bounded fallback: current station + type +
@@ -1567,6 +1597,7 @@ def bake(source, data_dir):
                                             entry.get("type"), official=official,
                                             dest=_feed_dest(op, t) or t.get("_odpt_dest"),
                                             max_extra=None,
+                                            origin=t.get("_start"),
                                         )
                                         widened = resolved is not None
                                 if resolved:
