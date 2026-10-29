@@ -5,6 +5,11 @@ Source: JR-Central's own 運行情報 site (plain JSON, BOM-prefixed, no key):
         train_info[]: {trainnumber: "5031M", delay_lin: "<minutes>",
         linename/nickname/traintype/direction: [{lang, name} multi-lang],
         tostation (destination), position/locationRow/locationCol}
+    https://traininfo.jr-central.co.jp/zairaisen/data/kobetsujikoku.json
+        the same trains' official timetables (per stop: HHMM + 停車/通過),
+        joined by (train_identification_key, trainnumber) - supplies the
+        scheduled minute and downstream stop sequence used as the matching
+        anchor for position-only rows.
 
 JR-Central uses short line names (東海道線/中央線/関西線/高山線) while
 dokorail and jr.suki.ing use the full 本線 names - LINE_NAME_REWRITES maps
@@ -51,6 +56,11 @@ SHINKANSEN_DEP_URL = BASE + "/shinkansen/var/train_info/departure_info_{}_{}.jso
 # 没有这两张 master，整份 feed 就没有任何站名，永远无法匹配。
 ZAISEN_LINE_MASTER_URL = BASE + "/zairaisen/data/hp_senku_master_ja.json"
 ZAISEN_STATION_MASTER_URL = BASE + "/zairaisen/data/hp_eki_master_ja.json"
+# 個別列車時刻表（当日全社 ~2300 本、gzip 1.5MB / 解压 24MB）:
+# train_identification_key 与 zaisenichi 的 train_info 逐条对应，每站带
+# 表定時刻（HHMM，可 >24h）与停車/通過区分。站间车只有 position 格、
+# 不知道下一站，必须靠它拿「该车自己的」表定发车分钟和后续停站序列。
+ZAISEN_TIMETABLE_URL = BASE + "/zairaisen/data/kobetsujikoku.json"
 
 _ZAISEN_GRID = []  # 进程内缓存: [(lookup, by_name, station_order)]
 
@@ -173,6 +183,98 @@ def _zaisen_station(grid, line_name, row):
     return None
 
 
+def _official_timetables(src, keys):
+    """{(train_identification_key, trainnumber): record} for `keys` only.
+
+    The identification key alone is NOT unique: a through working split at a
+    crew/line boundary keeps one key for two train numbers (325C 松阪→多気
+    and 325D 相可→新宮 share a key), so records are addressed by key+number.
+    kobetsujikoku.json has no per-train variant - the whole file is fetched
+    and narrowed to the handful of delayed trains. Failures return {}: rows
+    keep the plain position fallbacks."""
+    if not keys:
+        return {}
+    if src.offline:
+        d = _offline_json(src, "jc-kobetsujikoku.json")
+    else:
+        try:
+            d = common.get_json(ZAISEN_TIMETABLE_URL, retries=2)
+        except Exception as exc:
+            print(f"jrcentral kobetsujikoku: {type(exc).__name__}: {str(exc)[:120]}")
+            d = None
+    if not isinstance(d, dict):
+        return {}
+    out = {}
+    for t in d.get("train_info") or []:
+        k = str((t or {}).get("train_identification_key") or "")
+        if k and k in keys:
+            out[(k, str((t or {}).get("trainnumber") or ""))] = t
+    return out
+
+
+def _hhmm(v):
+    """'HHMM' (hours may exceed 23) -> minute of day, or None."""
+    v = str(v or "").strip()
+    if len(v) < 3:
+        return None
+    try:
+        return int(v[:-2]) * 60 + int(v[-2:])
+    except ValueError:
+        return None
+
+
+def _official_stops(rec):
+    """[(station, arrival_min, departure_min)] for the stops this train
+    actually makes (stopthroughkbn 1), in stopStationOrder order.
+    通過站带空时刻、也不存在于 suki 的停站模式里,锚在它们身上永远解不出，
+    所以直接剔除。"""
+    rows = []
+    for s in rec.get("timetable") or []:
+        if not isinstance(s, dict):
+            continue
+        if str(s.get("stopthroughkbn") or "1") != "1":
+            continue
+        name = _multi_lang(s.get("station"))
+        if not name:
+            continue
+        arr = _hhmm(s.get("arrivalTime1"))
+        if arr is None:
+            arr = _hhmm(s.get("arrivalTime2"))
+        dep = _hhmm(s.get("departureTime1"))
+        if dep is None:
+            dep = _hhmm(s.get("departureTime2"))
+        if arr is None and dep is None:
+            continue
+        try:
+            order = int(str(s.get("stopStationOrder") or "0"))
+        except ValueError:
+            order = 0
+        rows.append((order, name, arr, dep))
+    rows.sort(key=lambda r: r[0])
+    return [(name, arr, dep) for _, name, arr, dep in rows]
+
+
+def _official_anchor(stops, station, est):
+    """Index of the stop to anchor on, or None.
+
+    `station` (在站位置表解出的站名) 优先;它不在停站序列里(通過站)时退回
+    「表定发车不晚于 est 的最后一站」。锚在哪一站用的都是这张表里同一列
+    车自己的表定分钟，所以站间车不知道刚驶离/即将到达也不影响锁定，
+    只影响展示的 from 站(取已驶离站，宁保守)。"""
+    if station:
+        for i, (name, _, _) in enumerate(stops):
+            if name == station:
+                return i
+    if est is None:
+        return None
+    best = None
+    for i, (_, arr, dep) in enumerate(stops):
+        m = dep if dep is not None else arr
+        if m is not None and m <= est + 1:
+            best = i
+    return best
+
+
 def fetch_shinkansen(src):
     """Tokaido Shinkansen delayed trains. Empty list outside service hours
     (the var/ file 302s once withdrawn) or when everyone is on time."""
@@ -278,6 +380,7 @@ def _fetch_zairaisen(src):
         return None
 
     body = []
+    pairs = []
     grid = None
     for t in trains:
         if not isinstance(t, dict):
@@ -297,24 +400,65 @@ def _fetch_zairaisen(src):
             if grid is None:
                 grid = _zaisen_grid(src)
             station = _zaisen_station(grid, raw_name, t.get("locationRow"))
-        body.append(
-            {
-                "owl:sameAs": f"JR-Central:{number}.{t.get('train_identification_key', '')}",
-                "odpt:railway": "odpt.Railway:JR-Central",
-                "odpt:trainNumber": number,
-                "odpt:delay": delay_min * 60,
-                "odpt:trainType": _multi_lang(t.get("traintype")) or None,
-                "_line_ja": line_name,
-                "_suki_line": line_name,
-                "_station": station,
-                "_dest": _multi_lang(t.get("tostation")) or None,
-                # 站名来自站表序号、只有 now-delay 一个时刻锚点：dokorail
-                # 车段按站+时刻兜底(tol=20)对通勤线太松，交给 suki-direct
-                # 的 ±3 唯一性收敛
-                "_skip_position_leg": bool(station),
-                "_nickname": _multi_lang(t.get("nickname")) or None,
-            }
-        )
+        entry = {
+            "owl:sameAs": f"JR-Central:{number}.{t.get('train_identification_key', '')}",
+            "odpt:railway": "odpt.Railway:JR-Central",
+            "odpt:trainNumber": number,
+            "odpt:delay": delay_min * 60,
+            "odpt:trainType": _multi_lang(t.get("traintype")) or None,
+            "_line_ja": line_name,
+            "_suki_line": line_name,
+            "_station": station,
+            "_dest": _multi_lang(t.get("tostation")) or None,
+            # 站名来自站表序号、只有 now-delay 一个时刻锚点：dokorail
+            # 车段按站+时刻兜底(tol=20)对通勤线太松，交给 suki-direct
+            # 的 ±3 唯一性收敛
+            "_skip_position_leg": bool(station),
+            "_nickname": _multi_lang(t.get("nickname")) or None,
+        }
+        body.append(entry)
+        pairs.append((entry, t))
+
+    # 官方個別時刻表: 给每列车一个「它自己的」表定发车分钟 + 后续停站序列。
+    # 站间车靠这个才有锚点（位置格只能猜下一站），在站车也换成表定时刻，
+    # 比 now-delay 精确一个 feed 刷新周期。
+    now = common.jst_now()
+    now_min = now.hour * 60 + now.minute
+    official = _official_timetables(
+        src, {str(t.get("train_identification_key") or "") for _, t in pairs}
+    )
+    for e, t in pairs:
+        rec = official.get((
+            str(t.get("train_identification_key") or ""),
+            str(t.get("trainnumber") or ""),
+        ))
+        if not rec:
+            continue
+        stops = _official_stops(rec)
+        if len(stops) < 2:
+            continue
+        est = now_min - int(round((e.get("odpt:delay") or 0) / 60))
+        ai = _official_anchor(stops, e.get("_station"), est)
+        if ai is not None and e.get("_station") == stops[ai][0]:
+            m = stops[ai][2] if stops[ai][2] is not None else stops[ai][1]
+            if m is None or abs(m - est) > 15:
+                # 位置表解出的站在官方时刻上离 est 太远：多半是线路段
+                # 解错了（同名两段），退回表定时刻定锚
+                ai = _official_anchor(stops, None, est)
+        if ai is None:
+            continue
+        anchor_min = stops[ai][2] if stops[ai][2] is not None else stops[ai][1]
+        tail = stops[ai + 1:]
+        if anchor_min is None or not tail:
+            continue  # 已在终点 / 无表定時刻，无从匹配
+        e["_station"] = stops[ai][0]
+        e["_official"] = {
+            "departure": anchor_min,
+            "stations": [s[0] for s in tail],
+            "terminal": _multi_lang(rec.get("terminalStation")) or tail[-1][0],
+        }
+        e["_skip_position_leg"] = True
+
     return {
         "ok": True,
         "fetchedAt": common.jst_now().isoformat(),
