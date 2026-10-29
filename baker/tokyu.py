@@ -69,6 +69,14 @@ KYID_TO_STATION = {
     916: "新丸子",
     918: "元住吉",
     919: "日吉",
+    920: "綱島",
+    921: "大倉山",
+    922: "菊名",
+    923: "妙蓮寺",
+    924: "白楽",
+    925: "東白楽",
+    926: "反町",
+    927: "横浜",
     929: "不動前",
     930: "武蔵小山",
     931: "西小山",
@@ -79,12 +87,20 @@ KYID_TO_STATION = {
     983: "新横浜",
 }
 
-# section_id -> KYId (used when payload station_id is null).
+# section_id -> KYId (used when payload station_id is null). The Shin-yokohama
+# sections are the odd ones out; the 東横線 sections run 渋谷->横浜 twice, once
+# per direction, offset by 21 (2->渋谷/3->代官山 ... and 24->代官山/25->中目黒
+# ...), so the up run continues 14->日吉 ... 22->横浜 and the down run
+# 36->綱島 ... 43->横浜. 923=妙蓮寺 was confirmed against the timetable (both
+# directions land on a unique run at the reported minute), the rest follow the
+# same +21 offset and the published 東急 station order.
 SECTION_TO_KYID = {
     2: 26, 3: 908, 4: 909, 5: 910, 6: 911, 7: 912, 8: 913, 9: 914,
-    10: 915, 11: 916, 12: 57, 13: 918,
+    10: 915, 11: 916, 12: 57, 13: 918, 14: 919, 15: 920, 16: 921, 17: 922,
+    18: 923, 19: 924, 20: 925, 21: 926, 22: 927,
     24: 908, 25: 909, 26: 910, 27: 911, 28: 912, 29: 913, 30: 914,
     31: 915, 32: 916, 33: 57, 34: 918, 35: 919,
+    36: 920, 37: 921, 38: 922, 39: 923, 40: 924, 41: 925, 42: 926, 43: 927,
     46: 24, 47: 929, 48: 930, 49: 931, 50: 932, 51: 933, 52: 934,
     53: 914, 54: 915, 55: 916, 56: 57, 57: 918,
     59: 929, 60: 930, 61: 931, 62: 932, 63: 933, 64: 934,
