@@ -1316,6 +1316,25 @@ def bake(source, data_dir):
                 entry["name"] = t["_nickname"]
             if t.get("_dest"):
                 entry["to"] = t["_dest"]
+            elif not entry.get("to"):
+                # ODPT lines carry the service terminal as a station id
+                # (Toei/Tobu). Through-runs to another operator's line name a
+                # terminal that no suki pattern on this line ends at, so this
+                # only narrows - resolve ignores it when nothing matches.
+                dests = t.get("odpt:destinationStation")
+                if isinstance(dests, str):
+                    dests = [dests]
+                for d in dests or []:
+                    name = line.get("stations_by_id", {}).get(
+                        (d or "").rsplit(".", 1)[-1]
+                    )
+                    if name:
+                        entry["to"] = name
+                        # resolve's terminal gate is hard; only a real station
+                        # name may reach it (Tobu/Tokyu feeds also put
+                        # "◯◯線直通" in `to`, which no pattern terminus equals)
+                        t["_odpt_dest"] = name
+                        break
             if t.get("_or_more"):
                 # JR-Kyushu "+N分以上": the value is a floor, not exact
                 entry["delay_or_more"] = True
@@ -1462,7 +1481,7 @@ def bake(source, data_dir):
                                     stt, suki_index, direct,
                                     match_station, now, round(delay / 60),
                                     entry.get("type"), official=official,
-                                    dest=t.get("_dest"),
+                                    dest=t.get("_dest") or t.get("_odpt_dest"),
                                     # cloudrail 只发布报站后的 1-2 站（1253M
                                     # 羽鳥→岩間・友部，实际还到勝田 4 站），
                                     # max_extra=1 会把整列车判成站序不一致；

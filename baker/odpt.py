@@ -79,6 +79,12 @@ def fetch(src=None, operator="Toei"):
                 "odpt:trainType": t.get("odpt:trainType"),
                 "odpt:fromStation": t.get("odpt:fromStation"),
                 "odpt:toStation": t.get("odpt:toStation"),
+                # destination is the one disambiguator for loop/branch lines
+                # (大江戸線 月島 has 8 stop patterns; without the terminal the
+                # suki-direct pool ties by size and the row is dropped)
+                "odpt:destinationStation": t.get("odpt:destinationStation"),
+                "odpt:originStation": t.get("odpt:originStation"),
+                "odpt:railDirection": t.get("odpt:railDirection"),
                 "odpt:carComposition": t.get("odpt:carComposition"),
             }
         )
