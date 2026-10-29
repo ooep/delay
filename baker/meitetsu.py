@@ -10,7 +10,9 @@ Each Japanese `.PopupTrainInformation` popup contains, per train:
     種別 (type: 特急/快速特急/急行/準急/普通/ミュースカイ)
     行先 (destination, e.g. 豊橋 行)
     N分遅れ (delay minutes — present only when delayed)
-    停車駅 table: 駅名 | 定時着時刻 | 定時発時刻 (full scheduled route)
+    停車駅 table: 駅名 | 定時着時刻 | 定時発時刻 (scheduled times; it often
+      starts at the current station but for ~1/3 of trains starts at the
+      NEXT stop — the current one is already gone from the table)
     備考 <線名> (line name, e.g. 名古屋本線)
 
 No train number is exposed. Matching to suki therefore relies on the
@@ -21,7 +23,7 @@ time-anchored path. We emit only delayed trains (delay >= 1 min).
 import re
 import urllib.request
 
-from . import common
+from . import common, suki
 
 BASE = "https://top.meitetsu.co.jp/trainlocation/TrainRunningPosition{}.aspx"
 # Line-group page codes enumerated from the index (SelectStationOrLine.aspx).
@@ -215,10 +217,15 @@ def fetch(src=None):
             if anchor_dep:
                 hh, mm = anchor_dep.split(":")
                 # resolve_direct_by_time 的 official 口径是「报站之后」的
-                # 停站(不含报站)——rem[0] 就是报站,必须切掉,否则站序
-                # 一致性检查永远对不上,整条线的延误都钉不上班次。
+                # 停站(不含报站)。停車駅表有两种形态：137/209 个班次首行
+                # 就是报站(此时 rem[0] 是报站,要切掉),其余 72 个从下一
+                # 站才开始(rem[0] 已经是首站,切掉会丢一站、前缀比对全灭)。
+                # 只能按站名判断,不能一刀切。
+                tail = rem
+                if rem and suki.norm_station(rem[0]["name"]) == suki.norm_station(anchor):
+                    tail = rem[1:]
                 off = {"departure": int(hh) * 60 + int(mm),
-                       "stations": [s["name"] for s in rem[1:]],
+                       "stations": [s["name"] for s in tail],
                        "terminal": tr["dest"]}
             body.append({
                 "owl:sameAs": f"Meitetsu:{line}:{anchor}:{tr['dest']}",
