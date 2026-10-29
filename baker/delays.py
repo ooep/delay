@@ -800,9 +800,16 @@ class LegStore:
         if entry and entry.get("bundle"):
             asset = entry["bundle"]["calendars"].get(cal)
             if asset:
-                legs = self._legs_from_blocks(
-                    railway, common.bundle_blocks(self.source.bundle(asset["url"]) or [])
-                )
+                try:
+                    blocks = common.bundle_blocks(
+                        self.source.bundle(asset["url"]) or []
+                    )
+                except Exception as exc:  # noqa: BLE001 - degrade to no legs
+                    # one flaky bundle (tiles.dokorail.jp stops answering
+                    # mid-run) must not abort the whole bake
+                    print(f"bundle {railway}/{cal}: {type(exc).__name__}: {str(exc)[:100]}")
+                    blocks = []
+                legs = self._legs_from_blocks(railway, blocks)
         self.cal_cache[key] = legs
         return legs
 
