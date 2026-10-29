@@ -114,6 +114,29 @@ def _stops_consistent(stops_n, report_station, official, max_extra=1):
     return True
 
 
+def _widen_official_candidates(suki_index, cands, station, official):
+    """Add every key whose stop order carries the feed's official station
+    sequence, not just the keys tagged with the feed's line label.
+
+    Feeds name one line per service (埼京線・川越線), while suki tags the same
+    physical run with several (東北本線/赤羽線/りんかい線), so the line-scoped
+    pool misses the key and the row is dropped even though the feed ships its
+    own downstream stop list. The official sequence + terminal is the identity
+    evidence here - a key can only join when `_stops_consistent` accepts it -
+    and this is only tried after the scoped pool has already failed."""
+    seen = {str(c["key"]) for c in cands}
+    want = suki.norm_station(station)
+    out = list(cands)
+    for k, stops_n in suki_index._stops_norm.items():
+        if k in seen or want not in stops_n:
+            continue
+        if not _stops_consistent(stops_n, want, official, None):
+            continue
+        out.append({"key": k, "direct": True, "overlap": 1.0, "size": len(stops_n)})
+    out.sort(key=lambda c: (c["size"], suki.key_order(c["key"])))
+    return out
+
+
 def _hhmm_min(hhmm):
     """"HH:MM" (hours may exceed 23) -> minutes from midnight, or None."""
     if not hhmm:
@@ -1525,6 +1548,27 @@ def bake(source, data_dir):
                                         round(delay / 60),
                                         entry.get("type"), official,
                                         dest=_feed_dest(op, t))
+                                widened = False
+                                if (not resolved and official is not None
+                                        and official.get("departure") is not None
+                                        and official.get("stations")):
+                                    # 线路标签只覆盖列车的一段 (川越線)，同一趟车
+                                    # 在 suki 里带着多段线路名 (東北本線/赤羽線/
+                                    # りんかい線)，按标签筛的池子会漏掉它。官方
+                                    # 停站序列是更强的身份证据：整池重扫一次，
+                                    # 只有站序前缀+终点站都对得上的 key 能进来，
+                                    # 且仅在按标签的池子已经解不出时才尝试。
+                                    wide = _widen_official_candidates(
+                                        suki_index, direct, match_station, official)
+                                    if len(wide) > len(direct):
+                                        resolved = resolve_direct_by_time(
+                                            stt, suki_index, wide,
+                                            match_station, now, round(delay / 60),
+                                            entry.get("type"), official=official,
+                                            dest=_feed_dest(op, t) or t.get("_odpt_dest"),
+                                            max_extra=None,
+                                        )
+                                        widened = resolved is not None
                                 if resolved:
                                     # identity is the scheduled run, not the
                                     # stop pattern: a key holds many runs and
@@ -1533,12 +1577,20 @@ def bake(source, data_dir):
                                     rk = (str(resolved["cand"]["key"]),
                                           resolved["cand"].get("dep0"))
                                     if rk in claimed_suki:
-                                        continue
-                                    claimed_suki[rk] = t.get("number", "?")
-                                    entry["suki"] = [resolved["cand"]]
-                                    entry["scheduled"] = resolved["scheduled"]
-                                    if match_station != report_station:
-                                        entry["from"] = match_station
+                                        # 只有「标签池就解出了」才是重复行（同车
+                                        # 多次上报），整行丢弃；放宽池撞上已被认领
+                                        # 的班次说明这是另一趟车，保留未钉状态，
+                                        # 不能因为它消失
+                                        if widened:
+                                            resolved = None
+                                        else:
+                                            continue
+                                    else:
+                                        claimed_suki[rk] = t.get("number", "?")
+                                        entry["suki"] = [resolved["cand"]]
+                                        entry["scheduled"] = resolved["scheduled"]
+                                        if match_station != report_station:
+                                            entry["from"] = match_station
                 if leg:
                     stations = [s["station"] for s in leg["stops"]]
                     entry["railway"] = leg["railway"]
