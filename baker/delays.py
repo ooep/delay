@@ -14,6 +14,7 @@ import json
 import os
 import re
 import threading
+import unicodedata
 from pathlib import Path
 
 from . import common, holidays, suki, suki_timetable, jrcentral
@@ -233,6 +234,21 @@ def _same_station(a, b):
     )
 
 
+def _serves_station(fr, stops_n):
+    """True when the site's exact normName lookup of `from` finds it in the
+    candidate's stop list. Section text (繁藤～新改) passes through its
+    fragments - _align_from rewrites those to a single station before the
+    payload ships."""
+    if not stops_n:
+        return False
+    want = {_site_norm(fr)}
+    want.update(
+        _site_norm(p.strip()) for p in re.split(r"[~～]", str(fr)) if p.strip()
+    )
+    want.discard("")
+    return any(_site_norm(s) in want for s in stops_n)
+
+
 def _finalize_candidates(entry, stt, suki_index):
     """Filter and rank entry["suki"] so element 0 is the strongest evidence.
     The site consumes only suki[0]; leaving a reverse-direction or
@@ -250,6 +266,17 @@ def _finalize_candidates(entry, stt, suki_index):
         # 强候选:无精确包含且站序差 >1 的模式是"看着像"的别列车,留着
         # 会被站点按发车分钟钉上去(羽越本線 561M fuzzy=3 实测)。宁漏。
         items = [c for c in items if c.get("subseq") or c.get("fuzzy", 99) <= 1]
+    # 站点还用 `from` 是否落在 stop list 里做最后一道硬门槛;一条不服务
+    # 报告站的模式要么被站点丢弃(白占 suki[0]),要么在消费方跳过该门槛
+    # 时贴到别列车上(西武 3 池袋→西武秩父 特急被钉给停秋津的各停)。
+    # 站序/终点/时刻验证都过不了这一关的,在这里就弃掉。
+    if entry.get("from"):
+        items = [
+            c for c in items
+            if _serves_station(
+                entry["from"], suki_index._stops_norm.get(str(c.get("key"))) or []
+            )
+        ]
     dest = suki.norm_station(entry.get("to")) if entry.get("to") else None
     if dest:
         exact = [
@@ -324,10 +351,16 @@ _SITE_PAREN = re.compile(r"\([^)]*\)")
 
 
 def _site_norm(name):
-    """Mirror the site's normName: ASCII parens only, ケ/ヶ unify, drop 駅."""
+    """Mirror the site's normName: ASCII parens only, ケ/ヶ unify, drop 駅.
+
+    NFKC folds the CJK compatibility ideographs that feeds and tmap spell
+    differently (京王's 笹塚 U+FA10 vs 笹塚 U+585A) - the site's own normName
+    does not, so the fold has to happen on our side before we hand `from`
+    over: _align_from then writes the tmap spelling back and the site's
+    exact lookup succeeds."""
     if not name:
         return ""
-    n = _SITE_PAREN.sub("", str(name))
+    n = unicodedata.normalize("NFKC", _SITE_PAREN.sub("", str(name)))
     n = n.replace("ケ", "ヶ")
     n = re.sub(r"駅$", "", n)
     return n.strip()
