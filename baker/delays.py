@@ -356,8 +356,8 @@ def _pin_by_endpoints(entry, suki_index, stt):
     for key in suki_index._stops_norm:
         stops_n = suki_index._stops_norm[key]
         oi = _stop_indexes(origin, stops_n)
-        if not oi:
-            continue
+        if not oi or oi[0] >= len(stops_n) - 1:
+            continue  # 起点即终点站时那里只有到达时刻,拿来对发车必错
         fi = _from_indexes(fr, stops_n)
         if not fi:
             continue
