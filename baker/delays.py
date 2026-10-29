@@ -299,6 +299,8 @@ def _serves_station(fr, stops_n):
 
 
 _PSEUDO_DEST = ("直通", "方面", "経由", "環状")
+# 副站名括注:norm_station 只剥 ()/（), feed 与 tmap 还用〈〉(明治神宮前〈原宿〉)
+_ANGLE_PAREN = re.compile(r"\s*〈.*$")
 
 
 def _norm_station_label(name):
@@ -337,6 +339,15 @@ def _from_indexes(fr, stops_n):
     return sorted(set(out))
 
 
+def _runs_whole_leg(stops_n, leg_stops):
+    """True when the candidate key visits every stop of the leg in order
+    (not necessarily back-to-back: the key may model a longer through run
+    around the leg). A leg from another section or the reverse direction
+    never fits, which is what makes this a usable identity test."""
+    it = iter(stops_n)
+    return all(any(s == want for s in it) for want in leg_stops)
+
+
 def _pin_by_endpoints(entry, suki_index, stt):
     """Last-resort pin for rows whose leg stops describe another segment or
     the reverse direction (あずさ 甲府→松本 carrying a 甲府→高尾 leg): keep
@@ -345,7 +356,16 @@ def _pin_by_endpoints(entry, suki_index, stt):
     anything less stays unpinned (宁漏不误报). Only runs for empty suki --
     a stop-pattern pin always outranks an endpoint-only one. A missing `to`
     is filled from the leg's own terminus, which then demands an exact
-    departure match (no slack)."""
+    departure match (no slack).
+
+    On a busy through-service corridor (千代田線, 常磐線各停) several
+    patterns share the whole reported from→to and pass the minute window at
+    the leg origin, because their keys differ only past the reported `to`
+    (北綾瀬 vs 柏/我孫子/取手). The leg's own stop sequence separates them:
+    only keys that run the *entire* leg stop list in order can be the same
+    train, which also throws out reverse/wrong-section legs by construction.
+    When several still fit, the origin passage must be strictly closer
+    (within 1 min) - otherwise the row stays unpinned."""
     if not stt:
         return
     to = entry.get("to")
@@ -367,6 +387,12 @@ def _pin_by_endpoints(entry, suki_index, stt):
     dep_min = _hhmm_min(sched.get("dep"))
     if not dest or not origin or dep_min is None or dest == _norm_station_label(fr):
         return
+    leg_stops = [
+        _norm_station_label(_ANGLE_PAREN.sub("", s))
+        for s in (sched.get("stops") or [])
+    ]
+    if len(leg_stops) < 3:
+        leg_stops = []
     hits = {}
     for key in suki_index._stops_norm:
         stops_n = suki_index._stops_norm[key]
@@ -387,9 +413,24 @@ def _pin_by_endpoints(entry, suki_index, stt):
         )
         if gap <= tol:
             hits.setdefault((str(key), dep0), (gap, str(key), arr, dep0, stops_n))
-    if len(hits) != 1:
+    vals = list(hits.values())
+    if len(vals) > 1 and leg_stops:
+        full = [h for h in vals if _runs_whole_leg(h[4], leg_stops)]
+        if full:
+            vals = full
+            if len(vals) > 1:
+                gmin = min(h[0] for h in vals)
+                vals = [h for h in vals if h[0] == gmin] if gmin <= 1 else []
+            # 结构唯一但时刻明显更远:那是 tmap 把直通区间截短后留下的假
+            # 唯一(常磐線各停 我孫子 终到 vs 取手,车段却到取手)。时刻更
+            # 近的别家班次与它矛盾,宁可不钉。
+            if len(vals) == 1 and vals[0][0] > min(
+                3, max(1, min(h[0] for h in hits.values()))
+            ):
+                return
+    if len(vals) != 1:
         return
-    gap, key, arr, dep0, stops_n = next(iter(hits.values()))
+    gap, key, arr, dep0, stops_n = vals[0]
     entry["suki"] = [
         {
             "key": key,
