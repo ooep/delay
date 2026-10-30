@@ -1528,6 +1528,10 @@ def bake(source, data_dir):
         ("Mizushima", source.mizushima_feed),
         ("Manyo", source.manyo_feed),
         ("Toyama", source.toyama_feed),
+        # Tosaden intentionally absent: tosaden-rb.kochi-mobility.net's
+        # IchigoMap.txt is とさでん's BUS map (モビナビ高知 - the client JS
+        # only knows バス/バス停), so its rows tagged bus trips onto tram
+        # keys and flooded the board (502 false delays on 2026-10-29).
         ("Enoden", source.enoden_feed),
         ("Mizuma", source.mizuma_feed),
         ("HakodateTram", source.hakodate_tram_feed),

@@ -8,10 +8,15 @@ name: bake-delays
 #     lines_map.json snapshots (data/suki/)
 #
 # jr.suki.ing reads data/delays.json via Cloudflare Workers Static Assets
-# (jr-static.suki.ing/data/delay/*, pure static, zero-cost). Its by_suki_key
-# table tags the site's own trains with zero join logic. Board carries
-# generated_at so the UI can show its age; GitHub cron jitters, so treat
-# this as a refreshed snapshot, not a realtime stream.
+# (jr-delay.suki.ing, pure static, zero-cost). Its by_suki_key table tags the
+# site's own trains with zero join logic. Board carries generated_at so the
+# UI can show its age; GitHub cron jitters, so treat this as a refreshed
+# snapshot, not a realtime stream.
+#
+# 日本限定源的出口: あおなみ線/ハピラインNAVI 只接受日本 IP, runner 在美国,
+# 所以它们的 AONAMI_BASE/HAPILINE_BASE 指向同一个 Worker 的 /jp/* 代理
+# (Smart Placement 把脚本放到日本机房)。comfort.json 也顺手镜像到该域名,
+# 主站第一消费源不再依赖 GitHub CDN。
 
 on:
   schedule:
@@ -39,12 +44,16 @@ jobs:
       # Keikyu/Tobu/YokohamaMunicipal via api.odpt.org; without it only
       # Toei comes through the keyless public mirror
       ODPT_KEY: ${{ secrets.ODPT_KEY }}
-      # optional: Cloudflare API token for jr-delay static deploy
-      # (Workers Static Assets, pure static, zero-cost). Missing -> skip deploy.
+      # optional: Cloudflare API token for jr-delay deploy
+      # (Workers Static Assets + /jp/* proxy). Missing -> skip deploy.
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       # Reverse proxy for dokorail.jp to bypass Cloudflare runner-IP block.
       # Public Vercel edge; unset -> hits dokorail.jp directly.
       DOKORAIL_BASE: "https://dokorail-proxy.vercel.app"
+      # Japan-only feeds via our own Worker proxy (Smart Placement -> JP colo).
+      # 直连 origin 只在本地/有日本出口时可用（模块默认值就是 origin）。
+      AONAMI_BASE: "https://jr-delay.suki.ing/jp/aonami"
+      HAPILINE_BASE: "https://jr-delay.suki.ing/jp/hapi"
     steps:
       - uses: actions/checkout@v4
 
@@ -83,11 +92,17 @@ jobs:
             done
           fi
 
-      # 部署 delay JSON 到 Cloudflare jr-delay 静态 Worker（仅资产、零计费）。
+      # 把 jr-comfortable 的 comfort.json 镜像到自家域名（主站第一消费源）。
+      # 尽力而为：全部源失败则本次不产出 comfort.json，Worker 继续服务上一次部署。
+      - name: Mirror comfort.json onto jr-delay
+        if: ${{ env.CF_API_TOKEN != '' }}
+        run: python3 scripts/mirror_comfort.py
+
+      # 部署到 Cloudflare jr-delay（静态资产 + /jp/* 日本出口代理）。
       # 域名路由 jr-delay.suki.ing/* 已在 Dashboard 创建，主站主源即
       # https://jr-delay.suki.ing/delays.json
       # wrangler 按内容哈希增量上传：数据未变化时秒级跳过。
-      - name: Deploy delay JSON to Cloudflare (jr-delay, static, zero-cost)
+      - name: Deploy delay JSON to Cloudflare (jr-delay)
         if: ${{ env.CF_API_TOKEN != '' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}

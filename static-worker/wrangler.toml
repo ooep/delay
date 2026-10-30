@@ -1,14 +1,24 @@
-# jr-delay — delay 数据纯静态 Worker（仅资产，无 Worker 脚本，零计费）
+# jr-delay — delay 数据 Worker：纯静态资产 + /jp/* 日本出口代理。
 # 由 bake-delays.yml 每次烘焙后组装 assets 并 wrangler deploy（哈希增量，秒级跳过）。
 # 域名绑定在 Cloudflare Dashboard 完成：jr-delay.suki.ing → jr-delay（Zone Route）
 # 线上 URL: https://jr-delay.suki.ing/delays.json（主站消费）
-# CORS 由 assets 根 _headers 提供（平台层应用，同样零 Worker 调用）。
+# CORS 由 assets 根 _headers 提供（平台层应用）。
+#
+# /jp/<alias>/* 是唯一运行脚本的路径：あおなみ線/ハピラインNAVI 只接受日本 IP，
+# GitHub runner 在美国；Smart Placement 把 fetch handler 放到离源站最近的机房，
+# 让子请求从日本发出。run_worker_first 只放行 /jp/*，其余路径仍是纯资产、
+# 不产生 Worker 调用（静态资产始终由离访客最近的机房直出）。
 # 注意: routes 不写在此文件 —— token 无 Zone Workers Routes 权限时 wrangler 建路由会报错;
 # 路由已在 Dashboard 手动创建（pattern jr-delay.suki.ing/* → script jr-delay）。
 
 name = "jr-delay"
 compatibility_date = "2026-10-13"
+main = "./worker.js"
 
 [assets]
 directory = "./assets"
 not_found_handling = "404-page"
+run_worker_first = ["/jp/*"]
+
+[placement]
+mode = "smart"

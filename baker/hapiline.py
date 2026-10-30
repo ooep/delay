@@ -1,105 +1,151 @@
 """Hapi-Line Fukui (ハピラインふくい) live train feed via ハピラインNAVI.
 
-Public position map:
-    GET https://trainlocation.hapi-line.co.jp/sp/   (mobile)
-    GET https://trainlocation.hapi-line.co.jp/        (desktop)
+Reverse-engineered 2026-10-30 from the desktop map
+(https://trainlocation.hapi-line.co.jp/). The page is a Nuxt SPA — the HTML
+has no train data; the map is fed by:
 
-The NAVI diagram overlays every in-service train on the 敦賀 ⇄ 福井 ⇄ 大聖寺
-line as a number badge (e.g. 1753M, 720D, 1329M) followed by its destination
-(福井行 / 敦賀行 / 金沢行 / 芦原温泉行), with a "表示時間：YYYY/MM/DD HH:MM:SS"
-timestamp and an overall 運行情報 banner (運行情報なし = normal).
+    GET /data/traffic_info.json?<ms>
+        {"UP":[{"dt":"2026/10/30 12:19:39","st":"0"}],
+         "TS":[{"id":"E114D","tr":[{"no":"1335M","bs":"3","sy":"1",
+                                    "ik":"214","dl":"0","hk":"1"}]}],
+         "EK":[{"id":"D116","tr":[...]}, ...]}
+    GET /config/station.json    {"ikisaki":[{"code":"114","name":"福井"}, ...]}
+    GET /config/car_type.json   {"type":[{"code":"1","name":"普通"}, ...]}
 
-BLOCKED-AT-REVERSE-TIME NOTE: this runner's egress could not reach
-trainlocation.hapi-line.co.jp at all (proxy CONNECT timeouts on every retry,
-root / /sp/ /www variants). Only a text-extraction fetch through an internal
-fetcher worked, which strips the HTML/JS source — so the exact badge markup
-and whether per-train "N分遅れ" badges exist could NOT be confirmed live
-(待实机抓包). The parser below scans the rendered page for train tokens
-(4-digit number + M/D suffix) and emits an entry only when a delay token is
-found on the same badge; otherwise the body stays [] (位置図のみで遅れ時分表示が無ければ空).
+Slot ids name the position marker: "E###D"/"E###U" (TS) = standing at
+station ###, "D###"/"U###" (EK) = on the segment approaching station ###;
+verified by polling 1243M: EK D102 → TS E103D → EK D107 → TS E107D, and
+1335M: TS E114D → EK D116. D = 下り (codes increasing, toward 福井/金沢),
+U = 上り (toward 敦賀). `dl` is the delay in MINUTES, `ik` the destination
+station code (`ikisaki`, 1xx Hapi-Line / 2xx+ JR-West through section) and
+`sy` the car type; 貨物/回送等 (3/4) are not passenger services and are
+dropped.
+
+The host only accepts connections from Japanese IPs, so HAPILINE_BASE points
+the baker at our own jr-delay Worker proxy
+(https://jr-delay.suki.ing/jp/hapi, Smart Placement near the origin).
+Unset -> hits the origin directly (local runs).
 """
 
+import json
+import os
 import re
-import urllib.request
+import time
 
 from . import common
 
-URL = "https://trainlocation.hapi-line.co.jp/sp/"
-
-UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
-      "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
+BASE = os.environ.get("HAPILINE_BASE", "https://trainlocation.hapi-line.co.jp").rstrip("/")
+TRAFFIC_URL = BASE + "/data/traffic_info.json?{}"
+STATION_URL = BASE + "/config/station.json"
+CARTYPE_URL = BASE + "/config/car_type.json"
 
 DELAY_THRESHOLD_SEC = 60
+SKIP_TYPES = {"3", "4"}   # 貨物 / 回送等
 
-RE_TRAIN = re.compile(r"\b(\d{3,4}[MD])\b")
-RE_DEST = re.compile(r"(金沢|福井|敦賀|芦原温泉|大聖寺)行")
-RE_DELAY = re.compile(r"(\d+)\s*分(?:遅れ|遅延|程度)")
-RE_STAMP = re.compile(r"表示時間[：:]\s*(\d{4}/\d{2}/\d{2}\s*\d{1,2}:\d{2}(?::\d{2})?)")
+RE_AT = re.compile(r"^E(\d{3})([DU])$")    # train at station ###
+RE_EDGE = re.compile(r"^([DU])(\d{3})$")   # on the segment approaching ###
+
+_cfg = {}
 
 
-def _get(url, retries=2):
-    last = None
-    for attempt in range(retries + 1):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA})
-            with urllib.request.urlopen(req, timeout=25) as r:
-                return r.read().decode("utf-8", "replace")
-        except Exception as exc:
-            last = exc
-            if attempt < retries:
-                import time
-                time.sleep(1.5)
-    raise last
+def _get_json(url, retries=3):
+    return json.loads(common.http_get(url, retries=retries, timeout=25).decode("utf-8", "replace"))
+
+
+def _config(src):
+    if src.offline:
+        return (src.offline.get_json("hapiline-station.json"),
+                src.offline.get_json("hapiline-cartype.json"))
+    if "station" not in _cfg or "type" not in _cfg:
+        station = _get_json(STATION_URL)
+        cartype = _get_json(CARTYPE_URL)
+        _cfg["station"], _cfg["type"] = station, cartype
+    return _cfg["station"], _cfg["type"]
+
+
+def _stations(payload):
+    out = {}
+    for s in payload.get("ikisaki") or []:
+        code = str(s.get("code") or "").strip()
+        name = s.get("name")
+        if code and name:
+            out.setdefault(code, name.strip())
+    return out
+
+
+def _types(payload):
+    return {
+        str(t.get("code") or "").strip(): t.get("name")
+        for t in payload.get("type") or [] if t.get("code")
+    }
 
 
 def fetch(src=None):
     src = src or common.Source()
     try:
         if src.offline:
-            html = src.offline.get_text("hapi-sp.html")
+            payload = src.offline.get_json("hapiline-traffic.json")
         else:
-            html = _get(URL)
+            payload = _get_json(TRAFFIC_URL.format(int(time.time() * 1000)))
+        station_payload, type_payload = _config(src)
     except Exception as exc:
         print(f"hapi-line: {type(exc).__name__}: {str(exc)[:120]}")
         return {"ok": False, "fetchedAt": common.jst_now().isoformat(),
-                "body": [], "source": "trainlocation.hapi-line.co.jp",
-                "blocked": True}
+                "body": [], "source": "trainlocation.hapi-line.co.jp"}
 
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(html, "html.parser")
-    stamp = RE_STAMP.search(soup.get_text(" ", strip=True))
-
+    stations = _stations(station_payload)
+    types = _types(type_payload)
+    up = (payload.get("UP") or [{}])[0]
     body = []
     seen = set()
-    for node in soup.find_all(string=RE_TRAIN):
-        number = RE_TRAIN.search(str(node)).group(1)
-        parent_text = node.parent.get_text(" ", strip=True) if node.parent else ""
-        m_delay = RE_DELAY.search(parent_text)
-        if not m_delay:
-            continue  # no delay badge: not emitted (宁漏不误报)
-        delay_sec = int(m_delay.group(1)) * 60
-        if delay_sec < DELAY_THRESHOLD_SEC or number in seen:
-            continue
-        seen.add(number)
-        m_dest = RE_DEST.search(parent_text)
-        dest = m_dest.group(1) if m_dest else None
-        body.append({
-            "owl:sameAs": f"HapiLine:{number}",
-            "odpt:railway": "odpt.Railway:HapilineFukui.HapilineFukui",
-            "odpt:trainNumber": number,
-            "odpt:delay": delay_sec,
-            "odpt:trainType": "普通",
-            "_line_ja": "ハピラインふくい線",
-            "_suki_line": "ハピラインふくい線",
-            "_station": None,      # badge position unconfirmed 待实机抓包
-            "_dest": dest,
-            "_direction": "上り" if dest == "金沢" else (
-                "下り" if dest in ("敦賀", "福井") else None),
-        })
+    for container in ("TS", "EK"):
+        for slot in payload.get(container) or []:
+            sid = str(slot.get("id") or "")
+            m = RE_AT.match(sid)
+            if m:
+                code, lane = m.group(1), m.group(2)
+            else:
+                m = RE_EDGE.match(sid)
+                if not m:
+                    continue
+                lane, code = m.group(1), m.group(2)
+            station = stations.get(str(int(code)))
+            if not station:
+                continue
+            for tr in slot.get("tr") or []:
+                number = str(tr.get("no") or "").strip()
+                if not number or number in seen:
+                    continue
+                seen.add(number)
+                sy = str(tr.get("sy") or "").strip()
+                if sy in SKIP_TYPES:
+                    continue
+                try:
+                    delay_min = int(float(str(tr.get("dl") or "0").strip()))
+                except ValueError:
+                    continue
+                if delay_min * 60 < DELAY_THRESHOLD_SEC:
+                    continue
+                train_type = types.get(sy)
+                if train_type == "情報なし":
+                    train_type = None
+                body.append({
+                    "owl:sameAs": f"HapiLine:{number}",
+                    "odpt:railway": "odpt.Railway:HapilineFukui.HapilineFukui",
+                    "odpt:trainNumber": number,
+                    "odpt:delay": delay_min * 60,
+                    "odpt:trainType": train_type,
+                    "_line_ja": "ハピラインふくい線",
+                    "_suki_line": "ハピラインふくい線",
+                    "_station": station,
+                    "_dest": stations.get(str(tr.get("ik") or "").strip()),
+                    "_direction": "下り" if lane == "D" else "上り",
+                    "_skip_position_leg": True,
+                })
     return {
         "ok": True,
         "fetchedAt": common.jst_now().isoformat(),
-        "source_time": stamp.group(1) if stamp else None,
+        "source_time": up.get("dt"),
         "body": body,
         "source": "trainlocation.hapi-line.co.jp",
     }

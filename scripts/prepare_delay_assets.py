@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-prepare_delay_assets.py — 组装 jr-delay 纯静态 Worker 的 assets 目录。
+prepare_delay_assets.py — 组装 jr-delay Worker 的 assets 目录。
 
 从 data/ 把主站消费的 JSON 复制到 static-worker/assets/（内容直接放 assets 根，
 域名 jr-delay.suki.ing → assets 根，线上 URL 即 https://jr-delay.suki.ing/<file>）并补 CORS 头：
@@ -9,9 +9,10 @@ prepare_delay_assets.py — 组装 jr-delay 纯静态 Worker 的 assets 目录�
   data/sukijr.json            → assets/sukijr.json
   data/lines.json             → assets/lines.json
   data/keikyu-positions.json  → assets/keikyu-positions.json
+  data/comfort.json           → assets/comfort.json（scripts/mirror_comfort.py 本次抓到的镜像）
   data/suki/                  → assets/suki/（每周快照，烘焙输入缓存）
 
-部署由 bake-delays.yml 的 wrangler deploy 完成（仅资产模式，零计费）。
+部署由 bake-delays.yml 的 wrangler deploy 完成（静态资产 + /jp/* 代理脚本）。
 线上 URL: https://jr-delay.suki.ing/delays.json
 """
 import os
@@ -35,18 +36,6 @@ HEADERS = """/*
 ROBOTS = "User-agent: *\nDisallow: /\n"
 
 
-def copy_tree(src, dst):
-    n = 0
-    for root, dirs, files in os.walk(src):
-        rel = os.path.relpath(root, src)
-        target = dst if rel == '.' else os.path.join(dst, rel)
-        os.makedirs(target, exist_ok=True)
-        for f in files:
-            shutil.copy2(os.path.join(root, f), os.path.join(target, f))
-            n += 1
-    return n
-
-
 def main():
     if not os.path.isdir(SRC):
         print('[assets] data/ 不存在:', SRC, file=sys.stderr)
@@ -62,6 +51,7 @@ def main():
     PUBLISH = [
         'delays.json', 'sukijr.json', 'lines.json',
         'keikyu-positions.json', 'nishitetsu-positions.json',
+        'comfort.json',
     ]
     os.makedirs(OUT, exist_ok=True)
     n = 0
