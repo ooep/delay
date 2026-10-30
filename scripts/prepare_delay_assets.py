@@ -12,7 +12,7 @@ prepare_delay_assets.py — 组装 jr-delay Worker 的 assets 目录。
   data/comfort.json           → assets/comfort.json（scripts/mirror_comfort.py 本次抓到的镜像）
   data/suki/                  → assets/suki/（每周快照，烘焙输入缓存）
 
-部署由 bake-delays.yml 的 wrangler deploy 完成（静态资产 + /jp/* 代理脚本）。
+部署由 bake-delays.yml 的 wrangler deploy 完成（纯静态资产，无 Worker 脚本）。
 线上 URL: https://jr-delay.suki.ing/delays.json
 """
 import os

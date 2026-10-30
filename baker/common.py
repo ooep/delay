@@ -85,6 +85,36 @@ def get_text(url, headers=None, retries=3, timeout=30):
     return http_get(url, headers, retries=retries, timeout=timeout).decode("utf-8", "replace")
 
 
+_relay_token = {"value": "", "expires": 0.0}
+
+
+def jp_relay_token():
+    """GitHub Actions OIDC JWT for suki-jp-relay (the JP egress Worker).
+
+    Minted on demand for audience suki-jp-relay and cached for 4 of the
+    token's 5 minutes, so one bake reuses a single token across its relay
+    calls. Returns "" outside Actions - local runs hit the origins directly.
+    """
+    now = time.time()
+    if _relay_token["value"] and now < _relay_token["expires"]:
+        return _relay_token["value"]
+    url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL") or ""
+    bearer = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN") or ""
+    if not url or not bearer:
+        return ""
+    try:
+        raw = http_get(url + "&audience=suki-jp-relay",
+                       headers={"Authorization": f"Bearer {bearer}"},
+                       retries=2, timeout=10)
+        value = json.loads(raw.decode("utf-8")).get("value") or ""
+    except Exception as exc:
+        print(f"jp-relay: oidc {type(exc).__name__}: {str(exc)[:120]}")
+        return ""
+    if value:
+        _relay_token.update(value=value, expires=now + 240)
+    return value
+
+
 def jst_now():
     return datetime.now(JST)
 

@@ -22,9 +22,9 @@ station code (`ikisaki`, 1xx Hapi-Line / 2xx+ JR-West through section) and
 dropped.
 
 The host only accepts connections from Japanese IPs, so HAPILINE_BASE points
-the baker at our own jr-delay Worker proxy
-(https://jr-delay.suki.ing/jp/hapi, Smart Placement near the origin).
-Unset -> hits the origin directly (local runs).
+the baker at suki-jp-relay: a separate Cloudflare Worker pinned near Tokyo
+that only accepts GitHub Actions OIDC tokens minted for ooep/delay's bake
+workflow. Unset -> hits the origin directly (local runs).
 """
 
 import json
@@ -34,7 +34,8 @@ import time
 
 from . import common
 
-BASE = os.environ.get("HAPILINE_BASE", "https://trainlocation.hapi-line.co.jp").rstrip("/")
+ORIGIN = "https://trainlocation.hapi-line.co.jp"
+BASE = os.environ.get("HAPILINE_BASE", ORIGIN).rstrip("/")
 TRAFFIC_URL = BASE + "/data/traffic_info.json?{}"
 STATION_URL = BASE + "/config/station.json"
 CARTYPE_URL = BASE + "/config/car_type.json"
@@ -48,8 +49,18 @@ RE_EDGE = re.compile(r"^([DU])(\d{3})$")   # on the segment approaching ###
 _cfg = {}
 
 
+def _auth_headers():
+    # relay mode: the Worker demands a short-lived GitHub OIDC bearer;
+    # direct origin runs (local JP egress) need none
+    if BASE == ORIGIN:
+        return None
+    token = common.jp_relay_token()
+    return {"Authorization": f"Bearer {token}"} if token else None
+
+
 def _get_json(url, retries=3):
-    return json.loads(common.http_get(url, retries=retries, timeout=25).decode("utf-8", "replace"))
+    return json.loads(common.http_get(url, headers=_auth_headers(), retries=retries,
+                                      timeout=25).decode("utf-8", "replace"))
 
 
 def _config(src):

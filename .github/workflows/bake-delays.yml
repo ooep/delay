@@ -14,9 +14,11 @@ name: bake-delays
 # snapshot, not a realtime stream.
 #
 # 日本限定源的出口: あおなみ線/ハピラインNAVI 只接受日本 IP, runner 在美国,
-# 所以它们的 AONAMI_BASE/HAPILINE_BASE 指向同一个 Worker 的 /jp/* 代理
-# (Smart Placement 把脚本放到日本机房)。comfort.json 也顺手镜像到该域名,
-# 主站第一消费源不再依赖 GitHub CDN。
+# 所以它们的 AONAMI_BASE/HAPILINE_BASE 指向独立的 suki-jp-relay Worker
+# (另一个 Cloudflare 账号, Placement Hints 钉在东京机房)。它只认本 workflow
+# 现场签发的 GitHub OIDC 短时 JWT (aud=suki-jp-relay + repo/ref 校验, 无共享密钥);
+# 生产 jr-delay 保持纯静态资产, 不跑任何脚本。
+# comfort.json 也顺手镜像到 jr-delay, 主站第一消费源不再依赖 GitHub CDN。
 
 on:
   schedule:
@@ -30,6 +32,8 @@ on:
 
 permissions:
   contents: write
+  # lets baker.common.jp_relay_token mint the suki-jp-relay bearer
+  id-token: write
 
 concurrency:
   group: bake-delays
@@ -45,15 +49,17 @@ jobs:
       # Toei comes through the keyless public mirror
       ODPT_KEY: ${{ secrets.ODPT_KEY }}
       # optional: Cloudflare API token for jr-delay deploy
-      # (Workers Static Assets + /jp/* proxy). Missing -> skip deploy.
+      # (Workers Static Assets, pure static). Missing -> skip deploy.
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       # Reverse proxy for dokorail.jp to bypass Cloudflare runner-IP block.
       # Public Vercel edge; unset -> hits dokorail.jp directly.
       DOKORAIL_BASE: "https://dokorail-proxy.vercel.app"
-      # Japan-only feeds via our own Worker proxy (Smart Placement -> JP colo).
+      # Japan-only feeds via suki-jp-relay (Placement Hints -> Tokyo). The
+      # modules mint a GitHub OIDC JWT per feed (common.jp_relay_token); the
+      # Worker rejects everything that is not this workflow.
       # 直连 origin 只在本地/有日本出口时可用（模块默认值就是 origin）。
-      AONAMI_BASE: "https://jr-delay.suki.ing/jp/aonami"
-      HAPILINE_BASE: "https://jr-delay.suki.ing/jp/hapi"
+      AONAMI_BASE: "https://suki-jp-relay-7c41e9.lmc26817.workers.dev/jp/aonami"
+      HAPILINE_BASE: "https://suki-jp-relay-7c41e9.lmc26817.workers.dev/jp/hapi"
     steps:
       - uses: actions/checkout@v4
 
@@ -98,7 +104,7 @@ jobs:
         if: ${{ env.CF_API_TOKEN != '' }}
         run: python3 scripts/mirror_comfort.py
 
-      # 部署到 Cloudflare jr-delay（静态资产 + /jp/* 日本出口代理）。
+      # 部署到 Cloudflare jr-delay（纯静态资产，无 Worker 脚本，零计费）。
       # 域名路由 jr-delay.suki.ing/* 已在 Dashboard 创建，主站主源即
       # https://jr-delay.suki.ing/delays.json
       # wrangler 按内容哈希增量上传：数据未变化时秒级跳过。
