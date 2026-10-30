@@ -96,9 +96,9 @@ def fetch(src=None):
                 encoding="utf-8")
         else:
             html = _get(f"{BASE}?sta=1&dir=1")
-    except Exception as exc:
+    except Exception as exc:  # page down -> "unavailable", not "all on time"
         print(f"mizuma fetch: {type(exc).__name__}: {str(exc)[:120]}")
-        return {"ok": True, "fetchedAt": now.isoformat(), "body": [],
+        return {"ok": False, "fetchedAt": now.isoformat(), "body": [],
                 "source": "mikey.co.jp/mizuma_timetable"}
     status, delayed = _row_delay_min(html, now_min)
     for dep in delayed:
