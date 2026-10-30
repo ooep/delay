@@ -382,6 +382,12 @@ class Source:
 
         return manyo.fetch(self)
 
+    def nagoya_feed(self):
+        """Nagoya Municipal Subway line-level status (baker/nagoya.py)."""
+        from . import nagoya
+
+        return nagoya.fetch(self)
+
     def toyama_feed(self):
         """Toyama Chihou Railway VISH buscatch rt3 positions (baker/toyama.py)."""
         from . import toyama

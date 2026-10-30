@@ -1527,6 +1527,7 @@ def bake(source, data_dir):
         ("OkayamaTram", source.okayama_tram_feed),
         ("Mizushima", source.mizushima_feed),
         ("Manyo", source.manyo_feed),
+        ("NagoyaMunicipal", source.nagoya_feed),
         ("Toyama", source.toyama_feed),
         # Tosaden intentionally absent: tosaden-rb.kochi-mobility.net's
         # IchigoMap.txt is とさでん's BUS map (モビナビ高知 - the client JS
