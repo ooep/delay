@@ -1567,6 +1567,7 @@ def bake(source, data_dir):
         ("TG-SaitamaTransit", source.tg_saitamatransit_feed),
         ("TG-UtsunomiyaLRT", source.tg_utsunomiyalrt_feed),
         ("TG-YokohamaSeaside", source.tg_yokohamaseaside_feed),
+        ("TG-YokohamaMunicipal", source.tg_yokohamamunicipal_feed),
         ("TG-Shibayama", source.tg_shibayama_feed),
     ]
     _odpt_ops = ["Toei", "Tobu", "YokohamaMunicipal"]

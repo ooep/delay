@@ -592,6 +592,12 @@ class Source:
 
         return tg_shibayama.fetch(self)
 
+    def tg_yokohamamunicipal_feed(self):
+        """Yokohama Municipal Subway via Tokyo Glance (baker/tg_yokohamamunicipal.py)."""
+        from . import tg_yokohamamunicipal
+
+        return tg_yokohamamunicipal.fetch(self)
+
     def tg_choshi_feed(self):
         """Choshi Electric Railway via Tokyo Glance (baker/tg_choshi.py)."""
         from . import tg_choshi

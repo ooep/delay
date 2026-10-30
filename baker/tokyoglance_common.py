@@ -101,11 +101,18 @@ def _get_envelope(src):
         return env
 
 
-def _station_name(strings, idx):
-    """Current-position station id, only when it really is a station ref."""
-    if isinstance(idx, int) and 0 <= idx < len(strings) \
-            and strings[idx].startswith("odpt.Station:"):
-        return strings[idx]
+def _station_name(strings, idx, line_ref):
+    """Current-position station id, only when it belongs to the same operator.
+
+    The mirror currently fills `r` with one foreign placeholder (a JR-East
+    Narita Airport station) for every train, so a ref from another operator
+    is treated as absent instead of being fed to the position matcher.
+    """
+    if isinstance(idx, int) and 0 <= idx < len(strings):
+        ref = strings[idx]
+        op = line_ref.split(":", 1)[-1].split(".", 1)[0]
+        if ref.startswith("odpt.Station:" + op + "."):
+            return ref
     return None
 
 
@@ -153,7 +160,7 @@ def fetch(railways, src=None, operator="TG", source="api.tokyoglance.com"):
             "odpt:trainType": None,  # envelope carries no train type
             "_line_ja": ja,
             "_suki_line": ja,
-            "_station": _station_name(strings, o.get("r")),
+            "_station": _station_name(strings, o.get("r"), line_ref),
             "_dest": None,          # envelope carries no destination station
             "_direction": _direction_ja(strings, o.get("d")),
         })
