@@ -50,12 +50,18 @@ _cfg = {}
 
 
 def _auth_headers():
-    # relay mode: the Worker demands a short-lived GitHub OIDC bearer;
-    # direct origin runs (local JP egress) need none
+    # relay mode: the Worker demands the shared gate key plus a short-lived
+    # GitHub OIDC bearer; direct origin runs (local JP egress) need neither
     if BASE == ORIGIN:
         return None
+    headers = {}
+    key = common.jp_relay_key()
+    if key:
+        headers["X-Relay-Key"] = key
     token = common.jp_relay_token()
-    return {"Authorization": f"Bearer {token}"} if token else None
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers or None
 
 
 def _get_json(url, retries=3):

@@ -1,10 +1,14 @@
 # suki-jp-relay — 日本出口中继（独立 Cloudflare 账号，与生产 jr-delay 完全隔离）
-# 只被 ooep/delay 的 bake-delays.yml 调用：Worker 校验 GitHub Actions OIDC JWT
-# (aud=suki-jp-relay, repository=ooep/delay, ref=refs/heads/main)，无共享密钥。
+# 只被 ooep/delay 的 bake-delays.yml 调用，双闸门：
+#   1) 共享网关键 X-Relay-Key（Worker secret RELAY_KEY = GitHub secret relay_key）；
+#      缺失/不匹配直接静态 404，不校验、不回源，零子请求。
+#   2) GitHub Actions OIDC JWT (aud=suki-jp-relay, repository=ooep/delay,
+#      ref=refs/heads/main)，无长期共享凭据。
 # Placement Hints 钉在东京机房，让子请求以日本 IP 访问只对日本开放的两家源。
 # 部署（API 令牌不入库，手动执行）：
 #   CLOUDFLARE_ACCOUNT_ID=<account> CLOUDFLARE_API_TOKEN=<token> \
 #     npx wrangler@4 deploy --config jp-relay/wrangler.toml
+#   npx wrangler@4 secret put RELAY_KEY --config jp-relay/wrangler.toml
 # 免费计划 100k 请求/天；烘焙约 1.7k/天（每轮 6 次）。
 
 name = "suki-jp-relay-7c41e9"

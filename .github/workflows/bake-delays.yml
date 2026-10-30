@@ -55,10 +55,12 @@ jobs:
       # Reverse proxy for dokorail.jp to bypass Cloudflare runner-IP block.
       # Public Vercel edge; unset -> hits dokorail.jp directly.
       DOKORAIL_BASE: "https://dokorail-proxy.vercel.app"
-      # Japan-only feeds via suki-jp-relay (Placement Hints -> Tokyo). The
-      # modules mint a GitHub OIDC JWT per feed (common.jp_relay_token); the
-      # Worker rejects everything that is not this workflow.
+      # Japan-only feeds via suki-jp-relay (Placement Hints -> Tokyo). Every
+      # relay call carries the shared gate key (X-Relay-Key) plus a GitHub
+      # OIDC JWT minted per feed (common.jp_relay_token); requests missing
+      # either one get a static 404 from the Worker before any upstream fetch.
       # 直连 origin 只在本地/有日本出口时可用（模块默认值就是 origin）。
+      RELAY_KEY: ${{ secrets.RELAY_KEY }}
       AONAMI_BASE: "https://suki-jp-relay-7c41e9.lmc26817.workers.dev/jp/aonami"
       HAPILINE_BASE: "https://suki-jp-relay-7c41e9.lmc26817.workers.dev/jp/hapi"
       # api.tokyoglance.com 403s runner IPs outright; same relay, Tokyo egress.

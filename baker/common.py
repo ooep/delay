@@ -115,6 +115,16 @@ def jp_relay_token():
     return value
 
 
+def jp_relay_key():
+    """Shared gate key for suki-jp-relay (GitHub secret RELAY_KEY).
+
+    Sent as X-Relay-Key on every relay call; without it the Worker answers
+    a static 404 before verifying the OIDC token or touching the upstream.
+    Empty outside Actions - direct origin runs need no gate.
+    """
+    return os.environ.get("RELAY_KEY") or ""
+
+
 def jst_now():
     return datetime.now(JST)
 

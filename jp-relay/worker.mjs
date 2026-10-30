@@ -5,10 +5,11 @@
 // placement.region pins this fetch handler near Tokyo so the upstream
 // request leaves from Japan.
 //
-// Auth is GitHub Actions OIDC: the bake workflow mints a short-lived RS256
-// JWT for audience "suki-jp-relay"; this Worker verifies it against GitHub's
-// JWKS and requires repository=ooep/delay, ref=refs/heads/main. Nothing
-// secret is stored here, and only that workflow can call the origin.
+// Two locks: a shared gate key (Worker secret RELAY_KEY + GitHub Actions
+// secret relay_key) is checked first and answered with a static 404 when
+// missing, so scans cost neither CPU nor subrequests; then a GitHub Actions
+// OIDC RS256 JWT (aud "suki-jp-relay", repository ooep/delay, ref main) is
+// verified against GitHub's JWKS. Only that workflow can reach the origin.
 const ORIGINS = {
   aonami: { origin: 'https://trainlocation-aonamiline.jp', path: /^\/(data|config)\// },
   hapi: { origin: 'https://trainlocation.hapi-line.co.jp', path: /^\/(data|config)\// },
@@ -21,8 +22,36 @@ const ISS = 'https://token.actions.githubusercontent.com';
 const JWKS_URL = ISS + '/.well-known/jwks';
 const SKEW = 60;
 
+// Gate parameter, checked before anything else: requests without the exact
+// header get a fixed response and never reach verification or the upstream.
+// Kept in a header (not ?key=) so it is neither logged in URLs nor forwarded.
+const GATE_HEADER = 'x-suki-relay-key';
+
 let jwksCache = { keys: null, at: 0 };
 const keyCache = new Map();
+
+function staticNotFound() {
+  return new Response('Not Found', {
+    status: 404,
+    headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+  });
+}
+
+async function sha256(text) {
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+}
+
+async function gatePasses(request, env) {
+  const expected = String(env.RELAY_KEY || '');
+  if (!expected) return false;  // fail closed: an unset secret disables the relay
+  const got = request.headers.get(GATE_HEADER) || '';
+  if (!got) return false;
+  const a = await sha256(got);
+  const b = await sha256(expected);
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
 
 async function jwksKeys() {
   const now = Date.now();
@@ -89,6 +118,7 @@ async function verifyToken(token) {
 
 export default {
   async fetch(request, env) {
+    if (!(await gatePasses(request, env))) return staticNotFound();
     const url = new URL(request.url);
     const m = url.pathname.match(/^\/jp\/([a-z0-9-]+)(\/.*)$/);
     const src = m ? ORIGINS[m[1]] : null;

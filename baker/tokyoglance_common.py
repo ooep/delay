@@ -65,6 +65,11 @@ _envelope_cache = {"env": None, "err": None, "at": 0.0}
 def _auth_headers():
     headers = {"User-Agent": UA, "Accept": "application/json"}
     if BASE != ORIGIN:
+        key = common.jp_relay_key()
+        if key:
+            headers["X-Relay-Key"] = key
+        else:
+            print("tokyoglance: relay configured but no gate key")
         token = common.jp_relay_token()
         if token:
             headers["Authorization"] = f"Bearer {token}"
