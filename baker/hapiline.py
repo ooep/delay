@@ -57,7 +57,10 @@ def _auth_headers():
     headers = {}
     key = common.jp_relay_key()
     if key:
+        # the deployed gate reads x-suki-relay-key, older builds read
+        # X-Relay-Key; send both so either Worker build accepts the bake
         headers["X-Relay-Key"] = key
+        headers["X-Suki-Relay-Key"] = key
     token = common.jp_relay_token()
     if token:
         headers["Authorization"] = f"Bearer {token}"

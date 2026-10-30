@@ -67,7 +67,10 @@ def _auth_headers():
     if BASE != ORIGIN:
         key = common.jp_relay_key()
         if key:
+            # the deployed gate reads x-suki-relay-key, older builds read
+            # X-Relay-Key; send both so either Worker build accepts the bake
             headers["X-Relay-Key"] = key
+            headers["X-Suki-Relay-Key"] = key
         else:
             print("tokyoglance: relay configured but no gate key")
         token = common.jp_relay_token()
