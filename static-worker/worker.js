@@ -1,8 +1,8 @@
 // jr-delay runs as a static-assets Worker; /jp/* is the only path that runs
 // this script. あおなみ線 and ハピラインNAVI only accept TCP from Japanese
 // IPs while GitHub runners sit in the US, so the baker reads them through
-// this proxy. Smart Placement moves the fetch handler to a Japanese colo so
-// the subrequest leaves from Japan; everything else is served from assets
+// this proxy. placement.region pins the fetch handler near Tokyo so the
+// subrequest leaves from Japan; everything else is served from assets
 // (run_worker_first in wrangler.toml keeps this script off those paths).
 const ORIGINS = {
   aonami: 'https://trainlocation-aonamiline.jp',
@@ -30,14 +30,21 @@ export default {
         redirect: 'follow',
         signal: AbortSignal.timeout(20000),
       });
+      // closed proxy: a redirect must stay on the origin, or the allowlist
+      // above could be sidestepped
+      let finalHost = '';
+      try { finalHost = new URL(upstream.url || '').host; } catch {}
+      if (finalHost && finalHost !== new URL(origin).host) {
+        return new Response('upstream redirected off-origin', { status: 502, headers: { 'cache-control': 'no-store' } });
+      }
       const headers = new Headers();
       headers.set('content-type', upstream.headers.get('content-type') || 'application/json; charset=utf-8');
       headers.set('access-control-allow-origin', '*');
       headers.set('cache-control', 'no-store');
       headers.set('x-jp-proxy-upstream', String(upstream.status));
-      // identifies the edge that executed this handler; with Smart Placement
-      // a JP colo (NRT/KIX/ITM) means the upstream request left from Japan
-      headers.set('x-jp-proxy-colo', (request.cf && request.cf.colo) || 'unknown');
+      // ingress colo only — with placement.region pinning execution near
+      // Tokyo, this header no longer reflects where the subrequest left from
+      headers.set('x-jp-proxy-ingress-colo', (request.cf && request.cf.colo) || 'unknown');
       return new Response(upstream.body, { status: upstream.status, headers });
     } catch (err) {
       return new Response(`upstream fetch failed: ${err}`, {

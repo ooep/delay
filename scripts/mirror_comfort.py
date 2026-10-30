@@ -27,6 +27,11 @@ SOURCES = [
     'https://ooep.github.io/jr-comfortable/data/comfort.json',
     'https://cdn.jsdelivr.net/gh/ooep/jr-comfortable@main/data/comfort.json',
     'https://raw.githubusercontent.com/ooep/jr-comfortable/main/data/comfort.json',
+    # last resort: our own previous deployment. Without it, one failed run
+    # would rebuild assets without comfort.json and 404 the mirror until the
+    # next success; re-serving the stale copy keeps the site's 45-min
+    # freshness gate in charge instead of dropping the source entirely.
+    'https://jr-delay.suki.ing/comfort.json',
 ]
 
 
