@@ -13,8 +13,9 @@ name: bake-delays
 # UI can show its age; GitHub cron jitters, so treat this as a refreshed
 # snapshot, not a realtime stream.
 #
-# 日本限定源的出口: あおなみ線/ハピラインNAVI 只接受日本 IP, runner 在美国,
-# 所以它们的 AONAMI_BASE/HAPILINE_BASE 指向独立的 suki-jp-relay Worker
+# 日本限定源的出口: あおなみ線/ハピラインNAVI 只接受日本 IP, api.tokyoglance.com
+# 直接 403 runner, 所以它们的 AONAMI_BASE/HAPILINE_BASE/TOKYOGLANCE_BASE
+# 指向独立的 suki-jp-relay Worker
 # (另一个 Cloudflare 账号, Placement Hints 钉在东京机房)。它只认本 workflow
 # 现场签发的 GitHub OIDC 短时 JWT (aud=suki-jp-relay + repo/ref 校验, 无共享密钥);
 # 生产 jr-delay 保持纯静态资产, 不跑任何脚本。
@@ -60,6 +61,8 @@ jobs:
       # 直连 origin 只在本地/有日本出口时可用（模块默认值就是 origin）。
       AONAMI_BASE: "https://suki-jp-relay-7c41e9.lmc26817.workers.dev/jp/aonami"
       HAPILINE_BASE: "https://suki-jp-relay-7c41e9.lmc26817.workers.dev/jp/hapi"
+      # api.tokyoglance.com 403s runner IPs outright; same relay, Tokyo egress.
+      TOKYOGLANCE_BASE: "https://suki-jp-relay-7c41e9.lmc26817.workers.dev/jp/tg"
     steps:
       - uses: actions/checkout@v4
 

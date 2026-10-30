@@ -1,16 +1,18 @@
-// suki-jp-relay — authenticated egress relay for two Japan-only JSON APIs.
+// suki-jp-relay — authenticated egress relay for Japan-only JSON APIs.
 //
-// あおなみ線 / ハピラインNAVI accept TCP only from Japanese IPs, while the
-// GitHub runner sits in the US. placement.region pins this fetch handler
-// near Tokyo so the upstream request leaves from Japan.
+// あおなみ線 / ハピラインNAVI accept TCP only from Japanese IPs, and
+// api.tokyoglance.com 403s the GitHub runner, which sits in the US.
+// placement.region pins this fetch handler near Tokyo so the upstream
+// request leaves from Japan.
 //
 // Auth is GitHub Actions OIDC: the bake workflow mints a short-lived RS256
 // JWT for audience "suki-jp-relay"; this Worker verifies it against GitHub's
 // JWKS and requires repository=ooep/delay, ref=refs/heads/main. Nothing
 // secret is stored here, and only that workflow can call the origin.
 const ORIGINS = {
-  aonami: 'https://trainlocation-aonamiline.jp',
-  hapi: 'https://trainlocation.hapi-line.co.jp',
+  aonami: { origin: 'https://trainlocation-aonamiline.jp', path: /^\/(data|config)\// },
+  hapi: { origin: 'https://trainlocation.hapi-line.co.jp', path: /^\/(data|config)\// },
+  tg: { origin: 'https://api.tokyoglance.com', path: /^\/v[12]\/transit\// },
 };
 const AUD = 'suki-jp-relay';
 const REPO = 'ooep/delay';
@@ -89,8 +91,8 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const m = url.pathname.match(/^\/jp\/([a-z0-9-]+)(\/.*)$/);
-    const origin = m ? ORIGINS[m[1]] : null;
-    if (!origin) return new Response('not found', { status: 404 });
+    const src = m ? ORIGINS[m[1]] : null;
+    if (!src) return new Response('not found', { status: 404 });
 
     const auth = request.headers.get('authorization') || '';
     const claims = await verifyToken(auth.replace(/^Bearer\s+/i, ''));
@@ -100,11 +102,11 @@ export default {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return new Response('method not allowed', { status: 405 });
     }
-    // closed proxy: only the JSON endpoints the baker actually reads
-    if (!/^\/(data|config)\//.test(m[2])) {
+    // closed proxy: per-source allowlist of the JSON endpoints the baker reads
+    if (!src.path.test(m[2])) {
       return new Response('path not allowed', { status: 403 });
     }
-    const target = origin + m[2] + url.search;
+    const target = src.origin + m[2] + url.search;
     try {
       const upstream = await fetch(target, {
         method: request.method,
@@ -114,7 +116,7 @@ export default {
       });
       let finalHost = '';
       try { finalHost = new URL(upstream.url || '').host; } catch {}
-      if (finalHost && finalHost !== new URL(origin).host) {
+      if (finalHost && finalHost !== new URL(src.origin).host) {
         return new Response('upstream redirected off-origin', { status: 502, headers: { 'cache-control': 'no-store' } });
       }
       const headers = new Headers();

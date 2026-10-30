@@ -43,7 +43,8 @@ globalThis.fetch = async (url, init = {}) => {
     jwksHits++;
     return Response.json({ keys: [{ kty: 'RSA', kid: 'test-kid', use: 'sig', alg: 'RS256', n: pub.n, e: pub.e }] });
   }
-  if (u.startsWith(ORIGIN) || u.startsWith('https://trainlocation.hapi-line.co.jp')) {
+  if (u.startsWith(ORIGIN) || u.startsWith('https://trainlocation.hapi-line.co.jp')
+      || u.startsWith('https://api.tokyoglance.com')) {
     originHits++;
     lastOriginReq = { url: u, headers: init.headers, method: init.method };
     if (u.includes('redirect-test')) {
@@ -146,6 +147,24 @@ await t('path outside /data|/config -> 403', async () => {
   assert.equal(r.status, 403);
   const r2 = await worker.fetch(req('/jp/aonami/admin/secret', await jwt(baseClaims())));
   assert.equal(r2.status, 403);
+});
+
+await t('tg objects -> 200 proxied to tokyoglance', async () => {
+  const tok = await jwt(baseClaims());
+  const r = await worker.fetch(req('/jp/tg/v2/transit/objects/train?169', tok));
+  assert.equal(r.status, 200);
+  assert.equal(typeof (await r.json()), 'object');
+  assert.ok(lastOriginReq.url.startsWith('https://api.tokyoglance.com/v2/transit/objects/train?169'));
+});
+
+await t('tg delays v1 -> 200', async () => {
+  const r = await worker.fetch(req('/jp/tg/v1/transit/delays', await jwt(baseClaims())));
+  assert.equal(r.status, 200);
+});
+
+await t('path allowlist is per source (cross-source -> 403)', async () => {
+  assert.equal((await worker.fetch(req('/jp/tg/data/traffic_info.json', await jwt(baseClaims())))).status, 403);
+  assert.equal((await worker.fetch(req('/jp/aonami/v2/transit/objects/train', await jwt(baseClaims())))).status, 403);
 });
 
 await t('POST -> 405', async () => {

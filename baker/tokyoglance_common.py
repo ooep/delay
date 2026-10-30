@@ -24,15 +24,22 @@ against `lateThresholdSeconds` from the delays endpoint).
 
 We emit only trains with odpt:delay >= 60 s per the wave contract. Late-night
 snapshots legitimately have an empty body — that is honest, not a failure.
+
+GitHub runner IPs get a blanket 403 here (verified 2026-10-28..30), so CI
+points TOKYOGLANCE_BASE at the suki-jp-relay Worker (Tokyo egress, OIDC).
+The envelope is fetched once per bake and shared by all ~30 TG modules.
 """
 
+import os
+import threading
 import time
 
 from . import common
 
-API = "https://api.tokyoglance.com"
-OBJECTS_URL = API + "/v2/transit/objects/train"
-DELAYS_URL = API + "/v1/transit/delays"
+ORIGIN = "https://api.tokyoglance.com"
+BASE = os.environ.get("TOKYOGLANCE_BASE", ORIGIN).rstrip("/")
+OBJECTS_URL = BASE + "/v2/transit/objects/train"
+DELAYS_URL = BASE + "/v1/transit/delays"
 
 UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
       "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 "
@@ -49,13 +56,44 @@ _DIRECTION_JA = {
 }
 
 
+_ENVELOPE_TTL = 120.0   # one envelope per bake; modules run concurrently
+_ERROR_TTL = 45.0       # don't let 30 waiters each retry a failing provider
+_envelope_lock = threading.Lock()
+_envelope_cache = {"env": None, "err": None, "at": 0.0}
+
+
+def _auth_headers():
+    headers = {"User-Agent": UA, "Accept": "application/json"}
+    if BASE != ORIGIN:
+        token = common.jp_relay_token()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        else:
+            print("tokyoglance: relay configured but no OIDC token")
+    return headers
+
+
 def _get_envelope(src):
     """Return the parsed objects envelope, replaying offline fixtures when set."""
     if src is not None and getattr(src, "offline", None) is not None:
         return src.offline.get_json("live_objects.json")
-    return common.get_json(OBJECTS_URL, headers={"User-Agent": UA,
-                                               "Accept": "application/json"},
-                          retries=2)
+    with _envelope_lock:
+        age = time.monotonic() - _envelope_cache["at"]
+        fresh = _envelope_cache["env"] is not None and age < _ENVELOPE_TTL
+        stale_err = _envelope_cache["err"] is not None and age < _ERROR_TTL
+        if fresh:
+            return _envelope_cache["env"]
+        if stale_err:
+            raise _envelope_cache["err"]
+        try:
+            env = common.get_json(OBJECTS_URL, headers=_auth_headers(),
+                                  retries=2)
+        except Exception as exc:
+            err = RuntimeError(f"{type(exc).__name__}: {str(exc)[:160]}")
+            _envelope_cache.update(env=None, err=err, at=time.monotonic())
+            raise err from exc
+        _envelope_cache.update(env=env, err=None, at=time.monotonic())
+        return env
 
 
 def _station_name(strings, idx):
@@ -86,10 +124,10 @@ def fetch(railways, src=None, operator="TG", source="api.tokyoglance.com"):
     matched = 0
     try:
         env = _get_envelope(src)
-    except Exception as exc:  # provider down -> honest empty, not a crash
-        print(f"tokyoglance objects: {type(exc).__name__}: {str(exc)[:120]}")
-        return {"ok": True, "fetchedAt": common.jst_now().isoformat(),
-                "body": [], "source": source}
+    except Exception as exc:  # provider down -> "unavailable", never "all on time"
+        print(f"tokyoglance objects via {BASE}: {str(exc)[:160]}")
+        return {"ok": False, "fetchedAt": common.jst_now().isoformat(),
+                "body": [], "source": source, "error": str(exc)[:200]}
 
     strings = env.get("strings") or []
     for o in env.get("objects") or []:
