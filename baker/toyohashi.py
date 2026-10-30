@@ -148,7 +148,7 @@ def fetch(src=None):
         stops, sid_name, trips, by_stop, trip_stops = _load_gtfs()
     except Exception as exc:  # timetable unavailable -> no delay anchor
         print(f"toyohashi gtfs: {type(exc).__name__}: {str(exc)[:120]}")
-        return {"ok": True, "fetchedAt": common.jst_now().isoformat(),
+        return {"ok": False, "fetchedAt": common.jst_now().isoformat(),
                 "body": [], "source": "loc.bus-vision.jp/toyohashitetsudo"}
 
     name_to_stop = stops
