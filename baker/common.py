@@ -400,6 +400,12 @@ class Source:
 
         return tenhama.fetch(self)
 
+    def kobe_feed(self):
+        """Kobe Municipal Subway line-level status (baker/kobe.py)."""
+        from . import kobe
+
+        return kobe.fetch(self)
+
     def toyama_feed(self):
         """Toyama Chihou Railway VISH buscatch rt3 positions (baker/toyama.py)."""
         from . import toyama
