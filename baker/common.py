@@ -388,6 +388,18 @@ class Source:
 
         return nagoya.fetch(self)
 
+    def sendai_feed(self):
+        """Sendai Municipal Subway line-level status (baker/sendai.py)."""
+        from . import sendai
+
+        return sendai.fetch(self)
+
+    def tenhama_feed(self):
+        """Tenhama line-level status (baker/tenhama.py)."""
+        from . import tenhama
+
+        return tenhama.fetch(self)
+
     def toyama_feed(self):
         """Toyama Chihou Railway VISH buscatch rt3 positions (baker/toyama.py)."""
         from . import toyama
