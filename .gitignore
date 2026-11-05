@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+static-worker/assets/
+
+# 解密后的明文暂存区（CI 运行时才出现，绝不入库）
+/baker/
+/scripts/
+/ci/
+/run.sh
+/run_history.sh
+/verify_suki_match.py
+/jp-relay/worker.mjs
+/jp-relay/test.mjs
+/jp-relay/wrangler.toml
+/static-worker/wrangler.toml
+
+# mirror_comfort 的部署输入（step 6/8 产物，只用于打包上传，绝不入库）
+/data/comfort.json
