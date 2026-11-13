@@ -8,6 +8,9 @@ name: bake-delays
 # upstream identifiers. Logs: encryption/logrun.sh (sealed by repo vars).
 
 on:
+  # 实际节奏由外部调度器每 5 分钟 dispatch 一次；下面的 cron 只是兜底
+  # （GitHub 对高频 schedule 有节流，实测命中率很低）。两者共用同一个
+  # concurrency 组，重叠时后到的一轮被取消，不会重复烘焙。
   schedule:
     # 运行窗口: 东京时间 05:00 - 次日 02:00 (JST = UTC+9)
     - cron: "*/10 20-23 * * *"
