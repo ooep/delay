@@ -18,5 +18,6 @@ static-worker/assets/
 /data/comfort.json
 
 # 时刻表 blob 缓存（内容寻址，actions/cache 在运行之间携带；绝不入库：
-# 40 MiB/天 × 每天一份，且含上游时刻表原文）
-/data/tt/cache/
+# 40 MiB/天 × 每天一份，且含上游时刻表原文）。用通配是因为改名前的
+# actions/cache 条目仍会还原到旧路径，那一份同样不能被误提交。
+/data/*/cache/

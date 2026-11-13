@@ -81,7 +81,9 @@ Weekday/周末方言 → 其余**。日期层只在"索引有该日期 且 该�
 
 配套维护：
 - `data/tt/tt-index.json` 每周随 refresh 落盘，CDN 抖动时 `timetable_index()`
-  回退到该快照（丢索引 = 丢全部 leg，新干线直接失效）。
+  回退到该快照（丢索引 = 丢全部 leg，新干线直接失效）。落盘前会剥掉每个日历项
+  的 `url` 与 `dateBundles.baseUrl`，只留 sha256——索引是公开产物，没有理由
+  顺带发布一份上游地址清单，主机名在运行时由 `common.blob_url()` 拼回。
 - refresh 打印体检：日期层覆盖区间、今天是否覆盖、哪些线路"只有日期层"
   （`date-only railways`），以及各 JR 公司日期层的最远覆盖日。
 - 烘焙日志 `[leg] date bundles: N days, today ... covered=yes` 与
