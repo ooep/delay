@@ -62,6 +62,34 @@ jobs:
           OOEP_PASSPHRASE: ${{ secrets.CODE_KEY }}
         run: bash encryption/logrun.sh 2/8 bash encryption/prep.sh 2
 
+      # Timetable blobs are content addressed (`sha256/<hash>.json`) and served
+      # immutable, the index carries max-age=86400. Carrying them between runs
+      # turns a ~40 MiB pull every 10 minutes into roughly one a day. Nothing
+      # about freshness changes: a republished table gets a new hash, and a new
+      # hash is a miss by construction. Day-stamped key so exactly one run per
+      # day saves; every later run restores and saves nothing.
+      - name: Timetable cache key
+        id: ttday
+        run: echo "d=$(TZ=Asia/Tokyo date +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore timetable cache
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
+        continue-on-error: true
+        with:
+          path: data/tt/cache
+          key: tt-v3-${{ steps.ttday.outputs.d }}
+          restore-keys: |
+            tt-v3-
+
+      - name: Cache status
+        run: |
+          d=data/tt/cache
+          if [ -d "$d" ]; then
+            echo "blobs: $(find "$d" -maxdepth 1 -name '*.json' | wc -l) files, $(du -sh "$d" | cut -f1)"
+          else
+            echo "cold cache"
+          fi
+
       - name: Step 3/8
         env:
           OOEP_PASSPHRASE: ${{ secrets.CODE_KEY }}
